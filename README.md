@@ -1,4 +1,4 @@
-# 碘131隔離病房排程管理系統 (I-131 Ward Scheduling System)
+# (DEMO)碘131隔離病房排程管理系統 (I-131 Ward Scheduling System)
 ## 軟體規格說明書 (Software Requirements Specification)
 
 ### 1. 簡介 (Introduction)
@@ -99,20 +99,10 @@
 
 ---
 
-### 7. 部屬與執行 (Deployment)
+### 7. DEMO
+https://purekboy-ui.github.io/I131-Ward-Scheduler/
 
-若要於本地端執行：
 
-```bash
-# 1. 下載專案
-git clone <repository-url>
-
-# 2. 進入資料夾
-cd I131-Ward-Scheduler
-
-# 3. 啟動測試伺服器 (需安裝 Node.js)
-npx serve .
-```
 
 ---
 *文件版本：v1.0*
