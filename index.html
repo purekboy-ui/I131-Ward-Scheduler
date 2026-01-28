@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碘131隔離病房排程管理系統 | I-131 Scheduling</title>
+    <meta name="description" content="核醫科碘131隔離病房智慧排程管理系統，支援5B/6B床位管理、預約排程與報表輸出">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-icon">
+                <svg viewBox="0 0 100 100" class="atom-icon">
+                    <circle cx="50" cy="50" r="8" fill="currentColor" />
+                    <ellipse cx="50" cy="50" rx="45" ry="15" fill="none" stroke="currentColor" stroke-width="2"
+                        class="orbit orbit-1" />
+                    <ellipse cx="50" cy="50" rx="45" ry="15" fill="none" stroke="currentColor" stroke-width="2"
+                        class="orbit orbit-2" />
+                    <ellipse cx="50" cy="50" rx="45" ry="15" fill="none" stroke="currentColor" stroke-width="2"
+                        class="orbit orbit-3" />
+                </svg>
+            </div>
+            <h2>I-131 Ward Scheduler</h2>
+            <div class="loading-bar"><span></span></div>
+        </div>
+    </div>
+
+    <!-- Login Page - Single Column -->
+    <div id="login-page" class="page login-page" style="display: none;">
+        <div class="login-container-centered">
+            <div class="login-card">
+                <div class="login-logo">
+                    <span class="logo-emoji">☢️</span>
+                </div>
+                <div class="login-header">
+                    <h2>歡迎登入碘131病房排程系統</h2>
+                    <p>請輸入您的帳號密碼</p>
+                </div>
+                <form id="login-form" class="login-form">
+                    <div class="input-group">
+                        <label for="username">帳號</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            <input type="text" id="username" placeholder="請輸入帳號" required>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="password">密碼</label>
+                        <div class="input-wrapper">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <input type="password" id="password" placeholder="請輸入密碼" required>
+                        </div>
+                    </div>
+                    <div class="login-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="remember">
+                            <span class="checkmark"></span>
+                            記住我
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-primary btn-login">
+                        <span>登入系統</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </form>
+                <div class="demo-hint">
+                    <p>DEMO 帳號：</p>
+                    <code>admin / admin</code> 或 <code>user / user</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="page dashboard" style="display: none;">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">☢️</span>
+                    <span class="logo-text">I-131 Ward</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="calendar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    <span>排程月曆</span>
+                </a>
+                <a href="#" class="nav-item" data-page="bookings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                    <span>預約管理</span>
+                </a>
+                <a href="#" class="nav-item" data-page="reports">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                    </svg>
+                    <span>報表中心</span>
+                </a>
+                <a href="#" class="nav-item admin-only" data-page="admin">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <span>後台管理</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar" id="user-avatar">A</div>
+                    <div class="user-details">
+                        <span class="user-name" id="user-name">Admin</span>
+                        <span class="user-role" id="user-role">系統管理員</span>
+                    </div>
+                </div>
+                <button class="btn-logout" id="logout-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="header-left">
+                    <button class="btn-menu" id="menu-toggle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12" />
+                            <line x1="3" y1="6" x2="21" y2="6" />
+                            <line x1="3" y1="18" x2="21" y2="18" />
+                        </svg>
+                    </button>
+                    <h1 class="page-title" id="page-title">排程月曆</h1>
+                </div>
+                <div class="header-right">
+                    <div class="header-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">今日預約</span>
+                            <span class="stat-value" id="today-bookings">2</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">本月總計</span>
+                            <span class="stat-value" id="month-bookings">18</span>
+                        </div>
+                    </div>
+                    <div class="header-date" id="header-date"></div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Calendar Page -->
+                <section id="calendar-page" class="content-page active">
+                    <!-- Upcoming Available Slots -->
+                    <div class="upcoming-slots">
+                        <h3>🗓️ 最近可預約時段</h3>
+                        <div class="slots-list" id="upcoming-slots-list">
+                            <!-- Generated by JS -->
+                        </div>
+                    </div>
+
+                    <div class="calendar-header">
+                        <div class="calendar-nav">
+                            <button class="btn-icon" id="prev-month">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="15 18 9 12 15 6" />
+                                </svg>
+                            </button>
+                            <h2 class="calendar-title" id="calendar-title">2026年 1月</h2>
+                            <button class="btn-icon" id="next-month">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="calendar-actions">
+                            <button class="btn-today" id="today-btn">今天</button>
+                        </div>
+                    </div>
+                    <div class="calendar-legend">
+                        <div class="legend-item"><span class="legend-color available"></span>可預約</div>
+                        <div class="legend-item"><span class="legend-color occupied-5b"></span>5B 已預約</div>
+                        <div class="legend-item"><span class="legend-color occupied-6b"></span>6B 已預約</div>
+                        <div class="legend-item"><span class="legend-color closed"></span>不可預約</div>
+                    </div>
+                    <div class="calendar-grid">
+                        <div class="calendar-weekdays">
+                            <div class="weekday">週日</div>
+                            <div class="weekday">週一</div>
+                            <div class="weekday highlight">週二</div>
+                            <div class="weekday">週三</div>
+                            <div class="weekday">週四</div>
+                            <div class="weekday highlight">週五</div>
+                            <div class="weekday">週六</div>
+                        </div>
+                        <div class="calendar-days" id="calendar-days">
+                            <!-- Calendar days will be generated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Audit Logs Section (inside calendar page) -->
+                    <div class="audit-section">
+                        <div class="audit-header">
+                            <h3>📝 操作紀錄</h3>
+                            <div class="audit-filters">
+                                <input type="date" id="log-start-date" title="起始日期">
+                                <span>至</span>
+                                <input type="date" id="log-end-date" title="結束日期">
+                                <button class="btn-outline btn-search-log" id="search-logs-btn">查詢</button>
+                                <button class="btn-outline btn-reset-log" id="reset-logs-btn">重置</button>
+                            </div>
+                        </div>
+                        <div class="audit-list" id="audit-list">
+                            <!-- Generated by JS -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Bookings Page -->
+                <section id="bookings-page" class="content-page">
+                    <div class="bookings-header">
+                        <div class="search-bar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <input type="text" id="search-input" placeholder="搜尋病歷號、姓名、主治醫師...">
+                        </div>
+                    </div>
+                    <div class="bookings-table-wrapper">
+                        <table class="bookings-table">
+                            <thead>
+                                <tr>
+                                    <th>入住日期</th>
+                                    <th>床位</th>
+                                    <th>病歷號</th>
+                                    <th>病患姓名</th>
+                                    <th>劑量 (mCi)</th>
+                                    <th>主治醫師</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookings-tbody">
+                                <!-- Bookings will be generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Reports Page -->
+                <section id="reports-page" class="content-page">
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <div class="report-icon">📊</div>
+                            <h3>月度入住統計表</h3>
+                            <p>依月份統計入住人數、床位使用率</p>
+                            <div class="report-actions">
+                                <button class="btn-outline">預覽</button>
+                                <button class="btn-primary">下載 Excel</button>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-icon">☢️</div>
+                            <h3>碘131劑量統計表</h3>
+                            <p>輻防申報用劑量統計報表</p>
+                            <div class="report-actions">
+                                <button class="btn-outline">預覽</button>
+                                <button class="btn-primary">下載 PDF</button>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-icon">📋</div>
+                            <h3>病患排程清單</h3>
+                            <p>依日期範圍輸出排程清單</p>
+                            <div class="report-actions">
+                                <button class="btn-outline">預覽</button>
+                                <button class="btn-primary">下載 Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="report-filter">
+                        <h3>篩選條件</h3>
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label>日期範圍</label>
+                                <div class="date-range">
+                                    <input type="date" id="report-start">
+                                    <span>至</span>
+                                    <input type="date" id="report-end">
+                                </div>
+                            </div>
+                            <div class="filter-group">
+                                <label>主治醫師</label>
+                                <input type="text" id="report-doctor" placeholder="輸入醫師名稱">
+                            </div>
+                            <div class="filter-group">
+                                <label>劑量範圍 (mCi)</label>
+                                <div class="range-inputs">
+                                    <input type="number" placeholder="最小" id="dose-min">
+                                    <span>-</span>
+                                    <input type="number" placeholder="最大" id="dose-max">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Admin Page (User Management) -->
+                <section id="admin-page" class="content-page">
+                    <div class="admin-header">
+                        <h3>使用者帳號管理</h3>
+                        <button class="btn-primary" id="add-user-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            新增使用者
+                        </button>
+                    </div>
+                    <div class="admin-table-wrapper">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>帳號</th>
+                                    <th>姓名</th>
+                                    <th>角色</th>
+                                    <th>狀態</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <!-- Generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Booking Modal -->
+    <div id="booking-modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">新增預約</h3>
+                <button class="btn-close" id="modal-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <form id="booking-form" class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>入住日期</label>
+                        <input type="date" id="booking-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>床位選擇</label>
+                        <div class="bed-selector">
+                            <label class="bed-option">
+                                <input type="radio" name="bed" value="5B" required>
+                                <span class="bed-label">5B</span>
+                            </label>
+                            <label class="bed-option">
+                                <input type="radio" name="bed" value="6B">
+                                <span class="bed-label">6B</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>病歷號</label>
+                        <input type="text" id="booking-chart" placeholder="例：A123456789" required>
+                    </div>
+                    <div class="form-group">
+                        <label>病患姓名</label>
+                        <input type="text" id="booking-name" placeholder="請輸入姓名" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>服用劑量 (mCi)</label>
+                        <input type="number" id="booking-dose" placeholder="例：100" required>
+                    </div>
+                    <div class="form-group">
+                        <label>主治醫師</label>
+                        <input type="text" id="booking-doctor" placeholder="請輸入醫師名稱" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>備註</label>
+                    <textarea id="booking-notes" placeholder="選填"></textarea>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button type="button" class="btn-outline" id="modal-cancel">取消</button>
+                <button type="submit" form="booking-form" class="btn-primary">確認預約</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Day Management Modal (Admin) -->
+    <div id="day-modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content day-modal-content">
+            <div class="modal-header">
+                <h3 id="day-modal-title">日期管理</h3>
+                <button class="btn-close" id="day-modal-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body day-modal-body">
+                <div class="day-info" id="day-info"></div>
+                <div class="day-beds-control" id="day-beds-control"></div>
+                <div class="day-bookings-list" id="day-bookings-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Modal (Admin) -->
+    <div id="user-modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="user-modal-title">新增使用者</h3>
+                <button class="btn-close" id="user-modal-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <form id="user-form" class="modal-body">
+                <div class="form-group">
+                    <label>帳號</label>
+                    <input type="text" id="user-username" placeholder="請輸入帳號" required>
+                </div>
+                <div class="form-group">
+                    <label>密碼</label>
+                    <input type="password" id="user-password" placeholder="請輸入密碼">
+                </div>
+                <div class="form-group">
+                    <label>姓名</label>
+                    <input type="text" id="user-display-name" placeholder="請輸入姓名" required>
+                </div>
+                <div class="form-group">
+                    <label>角色</label>
+                    <select id="user-role-select" required>
+                        <option value="user">一般使用者</option>
+                        <option value="admin">系統管理員</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label inline-checkbox">
+                        <input type="checkbox" id="user-active" checked>
+                        <span class="checkmark"></span>
+                        帳號啟用
+                    </label>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button type="button" class="btn-outline" id="user-modal-cancel">取消</button>
+                <button type="submit" form="user-form" class="btn-primary">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu for Calendar -->
+    <div id="context-menu" class="context-menu">
+        <button class="context-item" data-action="edit">✏️ 編輯預約</button>
+        <button class="context-item" data-action="move">📅 移動日期</button>
+        <button class="context-item delete" data-action="delete">🗑️ 刪除預約</button>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
