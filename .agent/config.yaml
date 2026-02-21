@@ -1,0 +1,46 @@
+version: 1.0.0
+schemaVersion: 2
+aliases:
+  stripe: >-
+    https://raw.githubusercontent.com/skills-sh/skills/main/stripe-payment.skill.md
+  paypal: >-
+    https://raw.githubusercontent.com/skills-sh/skills/main/paypal-integration.skill.md
+  oauth: https://raw.githubusercontent.com/skills-sh/skills/main/oauth2.skill.md
+  jwt: https://raw.githubusercontent.com/skills-sh/skills/main/jwt-auth.skill.md
+  supabase: >-
+    https://raw.githubusercontent.com/skills-sh/skills/main/supabase-auth.skill.md
+  docker: >-
+    https://raw.githubusercontent.com/skills-sh/skills/main/docker-mastery.skill.md
+  k8s: https://raw.githubusercontent.com/skills-sh/skills/main/kubernetes.skill.md
+  terraform: https://raw.githubusercontent.com/skills-sh/skills/main/terraform.skill.md
+  tailwind: >-
+    https://raw.githubusercontent.com/skills-sh/skills/main/tailwind-best-practices.skill.md
+  react: >-
+    https://raw.githubusercontent.com/skills-sh/skills/main/react-patterns.skill.md
+  nextjs: https://raw.githubusercontent.com/skills-sh/skills/main/nextjs.skill.md
+watchdog:
+  enabled: true
+  interval: 60
+  files:
+    - package.json
+    - go.mod
+    - requirements.txt
+    - pyproject.toml
+    - docs/RoadMap.md
+    - docker-compose.yml
+    - .env.example
+security:
+  pre_commit:
+    enabled: true
+    check_secrets: true
+    check_large_files: true
+    large_file_threshold_mb: 1
+  import_skill:
+    deep_scan: true
+    auto_approve: false
+output:
+  format: text
+  color: true
+  verbose: false
+autoScan: true
+enableWatchdog: true

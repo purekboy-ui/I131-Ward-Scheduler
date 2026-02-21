@@ -1,0 +1,21 @@
+{
+  "hosting": {
+    "target": "i131-ward-scheduler",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "vitest.config.js",
+      "package.json",
+      "package-lock.json",
+      "*.md",
+      "docs/**",
+      "test_output.txt",
+      "start_server.bat",
+      "*.bak",
+      "utils.test.js"
+    ],
+    "rewrites": []
+  }
+}

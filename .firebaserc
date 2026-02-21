@@ -1,0 +1,13 @@
+{
+  "projects": {},
+  "targets": {
+    "nminfo-f108e": {
+      "hosting": {
+        "i131-ward-scheduler": [
+          "i131-ward-scheduler"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

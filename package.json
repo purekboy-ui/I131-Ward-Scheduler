@@ -1,0 +1,28 @@
+{
+  "name": "demo_i131",
+  "version": "1.0.0",
+  "description": "本系統為專為核子醫學科設計之「碘131隔離病房排程管理系統」，旨在解決傳統紙本或 Excel 排程的效率低落與錯誤風險。透過視覺化的月曆介面、自動化的規則檢核與權限控管，提升排床效率並確保輻防安全。",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "npx http-server . -p 8080 -c-1 -o",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/purekboy-ui/I131-Ward-Scheduler.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/purekboy-ui/I131-Ward-Scheduler/issues"
+  },
+  "homepage": "https://github.com/purekboy-ui/I131-Ward-Scheduler#readme",
+  "devDependencies": {
+    "jsdom": "^28.1.0",
+    "vitest": "^4.0.18"
+  }
+}

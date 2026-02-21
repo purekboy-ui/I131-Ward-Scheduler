@@ -1,0 +1,56 @@
+# GitHub Action: CI (Continuous Integration)
+# 自動化建置與品質檢查
+# 觸發時機：push 到 main、PR、或手動觸發
+#
+# 包含步驟：
+#   1. 版本號一致性檢查（package.json vs scripts/check-version.js）
+#   2. Extension 安裝、TypeScript 編譯、依賴健全性檢查
+#   3. WebUI 安裝與建置
+#   4. 打包 VSIX（確保可發布）
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            webui/package-lock.json
+            vscode-extension/package-lock.json
+
+      - name: Version Sync Check
+        run: node scripts/check-version.js
+
+      - name: Install, Compile & Smoke Check Extension
+        working-directory: ./vscode-extension
+        run: |
+          npm ci
+          npm run compile
+          npm run smoke:deps
+
+      - name: Install & Build WebUI
+        working-directory: ./webui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package Extension (VSIX Guard)
+        working-directory: ./vscode-extension
+        run: |
+          rm -f *.vsix
+          npm run package

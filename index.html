@@ -39,7 +39,17 @@
         <div class="login-container-centered">
             <div class="login-card">
                 <div class="login-logo">
-                    <span class="logo-emoji">☢️</span>
+                    <span class="logo-emoji"><svg viewBox="-2 -2 28 28" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="56" height="56"
+                            style="color:var(--primary);">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <path
+                                d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z">
+                            </path>
+                            <path
+                                d="M15.7 3.8c-2.04-2.03-7.36-.02-11.9 4.5-4.54 4.52-6.54 9.87-4.5 11.9 2.04 2.03 7.36.02 11.9-4.5 4.54-4.52 6.54-9.87 4.5-11.9Z">
+                            </path>
+                        </svg></span>
                 </div>
                 <div class="login-header">
                     <h2>歡迎登入碘131病房排程系統</h2>
@@ -84,7 +94,7 @@
                 </form>
                 <div class="demo-hint">
                     <p>DEMO 帳號：</p>
-                    <code>admin / admin</code> 或 <code>user / user</code>
+                    <code>admin / admin</code> 或 <code>user / user</code> 或 <code>phar / phar</code>（藥師）
                 </div>
             </div>
         </div>
@@ -96,7 +106,17 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <span class="logo-icon">☢️</span>
+                    <span class="logo-icon"><svg viewBox="-2 -2 28 28" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"
+                            style="color:var(--primary);">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <path
+                                d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z">
+                            </path>
+                            <path
+                                d="M15.7 3.8c-2.04-2.03-7.36-.02-11.9 4.5-4.54 4.52-6.54 9.87-4.5 11.9 2.04 2.03 7.36.02 11.9-4.5 4.54-4.52 6.54-9.87 4.5-11.9Z">
+                            </path>
+                        </svg></span>
                     <span class="logo-text">I-131 Ward</span>
                 </div>
             </div>
@@ -119,24 +139,30 @@
                     </svg>
                     <span>預約管理</span>
                 </a>
-                <a href="#" class="nav-item" data-page="reports">
+                <a href="#" class="nav-item pharmacist-only" data-page="medication" style="display: none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.5 20.5l-6-6a4.243 4.243 0 0 1 6-6l6 6a4.243 4.243 0 0 1-6 6z" />
+                        <line x1="13.5" y1="6.5" x2="17.5" y2="10.5" />
+                    </svg>
+                    <span>訂藥管理</span>
+                </a>
+                <a href="#" class="nav-item admin-only" data-page="reports">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
                         <path d="M22 12A10 10 0 0 0 12 2v10z" />
                     </svg>
                     <span>報表中心</span>
                 </a>
-                <a href="#" class="nav-item admin-only" data-page="admin">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
-                    <span>後台管理</span>
-                </a>
             </nav>
             <div class="sidebar-footer">
+                <a href="#" class="nav-item admin-only" data-page="admin" style="margin-bottom:12px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span>系統後台</span>
+                </a>
                 <div class="user-info">
                     <div class="user-avatar" id="user-avatar">A</div>
                     <div class="user-details">
@@ -193,6 +219,14 @@
                         <div class="slots-list" id="upcoming-slots-list">
                             <!-- Generated by JS -->
                         </div>
+                    </div>
+
+                    <div
+                        style="background:var(--bg-secondary); border-left:4px solid var(--accent); padding:10px 16px; margin-bottom:16px; border-radius:4px; font-size:0.9rem; color:var(--text-secondary); line-height:1.5;">
+                        <strong>💡 操作提示：</strong><br>
+                        1. 點擊「空床」可直接進入新增住床預約介面（含小劑量門診預約）。<br>
+                        2. 點擊「已預約病患卡片」可開啟編輯選單，支援右鍵快捷刪除或編輯。<br>
+                        3. 【鎖定保護】若距離入住不到 21 天，該床位將受保護，將無法被非管理員新增、修改或刪除。
                     </div>
 
                     <div class="calendar-header">
@@ -252,8 +286,11 @@
                     </div>
                 </section>
 
-                <!-- Bookings Page -->
                 <section id="bookings-page" class="content-page">
+                    <div
+                        style="background:var(--bg-secondary); border-left:4px solid var(--primary); padding:10px 16px; margin-bottom:16px; border-radius:4px; font-size:0.9rem; color:var(--text-secondary); line-height:1.5;">
+                        <strong>💡 操作提示：</strong> 在這裡可快速搜尋所有歷史或未來預約，可透過右上角的日期區間精準設定過濾條件。若想看到小劑量患者，請勾選「包含小劑量預約」。
+                    </div>
                     <div class="bookings-header">
                         <div class="search-bar">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -262,6 +299,111 @@
                             </svg>
                             <input type="text" id="search-input" placeholder="搜尋病歷號、姓名、主治醫師...">
                         </div>
+                        <div class="booking-date-filter"
+                            style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <input type="date" id="booking-filter-start" title="起始日期"
+                                style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;">
+                            <span style="color:var(--text-muted);">至</span>
+                            <input type="date" id="booking-filter-end" title="結束日期"
+                                style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;">
+                            <button class="btn-outline" id="booking-filter-btn"
+                                style="padding:6px 12px;font-size:0.85rem;">篩選</button>
+                            <button class="btn-outline" id="booking-filter-reset"
+                                style="padding:6px 12px;font-size:0.85rem;">重置</button>
+                            <label class="checkbox-label" style="margin-left:8px;">
+                                <input type="checkbox" id="booking-include-op">
+                                <span class="checkmark"></span>
+                                包含小劑量預約
+                            </label>
+                        </div>
+                    </div>
+                    <div class="bookings-table-wrapper">
+                        <table class="bookings-table">
+                            <thead>
+                                <tr>
+                                    <th>日期</th>
+                                    <th>類型</th>
+                                    <th>病歷號</th>
+                                    <th>病患姓名</th>
+                                    <th>醫令劑量</th>
+                                    <th>劑型</th>
+                                    <th>Thyrogen</th>
+                                    <th>訂藥</th>
+                                    <th>主治醫師</th>
+                                    <th>預約者</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookings-tbody">
+                                <!-- Bookings will be generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Medication Management Page (Admin/MedAdmin Only) -->
+                <section id="medication-page" class="content-page">
+                    <div
+                        style="background:var(--bg-secondary); border-left:4px solid var(--bed-5b); padding:10px 16px; margin-bottom:16px; border-radius:4px; font-size:0.9rem; color:var(--text-secondary); line-height:1.5;">
+                        <strong>💡 操作提示：</strong><br>
+                        本頁面供藥師與管理員追蹤住院病患的碘 131 備藥進度。您可以直接在此調整「劑量與劑型」，並點擊按鈕變更「訂藥狀態」。確認配藥完畢後，請利用右側的「匯出
+                        Excel」或「列印」功能，輸出完整病患交班表。
+                    </div>
+                    <div class="medication-header">
+                        <div class="search-bar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <input type="text" id="med-search-input" placeholder="搜尋病患或病歷號...">
+                        </div>
+                        <div class="med-filters"
+                            style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="med-filter-unorder" checked>
+                                <span class="checkmark"></span>
+                                只顯示未訂藥
+                            </label>
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                <input type="date" id="med-filter-start" title="起始日期"
+                                    style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;">
+                                <span style="color:var(--text-muted);">至</span>
+                                <input type="date" id="med-filter-end" title="結束日期"
+                                    style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:0.85rem;">
+                            </div>
+                            <div style="display:flex;gap:4px;">
+                                <button class="btn-outline med-quick-filter" data-days="7"
+                                    style="padding:4px 10px;font-size:0.8rem;">7天內</button>
+                                <button class="btn-outline med-quick-filter" data-days="14"
+                                    style="padding:4px 10px;font-size:0.8rem;">14天內</button>
+                                <button class="btn-outline med-quick-filter" data-days="30"
+                                    style="padding:4px 10px;font-size:0.8rem;">1個月</button>
+                                <button class="btn-outline" id="med-filter-reset"
+                                    style="padding:4px 10px;font-size:0.8rem;">全部</button>
+                            </div>
+                            <div style="display:flex;gap:6px;margin-left:auto;">
+                                <button class="btn-outline" id="med-print-btn"
+                                    style="padding:4px 10px;font-size:0.8rem;display:flex;align-items:center;gap:4px;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        width="14" height="14">
+                                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                                        <path
+                                            d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2">
+                                        </path>
+                                        <rect x="6" y="14" width="12" height="8"></rect>
+                                    </svg> 列印/PDF
+                                </button>
+                                <button class="btn-primary" id="med-export-excel-btn"
+                                    style="padding:4px 10px;font-size:0.8rem;display:flex;align-items:center;gap:4px;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        width="14" height="14">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg> 匯出Excel
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="bookings-table-wrapper">
                         <table class="bookings-table">
@@ -269,15 +411,50 @@
                                 <tr>
                                     <th>入住日期</th>
                                     <th>床位</th>
-                                    <th>病歷號</th>
-                                    <th>病患姓名</th>
+                                    <th>病患資訊</th>
+                                    <th>劑量 / 劑型</th>
+                                    <th>Thyrogen</th>
+                                    <th>訂藥狀態</th>
+                                </tr>
+                            </thead>
+                            <tbody id="medication-tbody">
+                                <!-- Generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Outpatient (Low Dose) Page -->
+                <section id="outpatient-page" class="content-page">
+                    <div
+                        style="background:var(--bg-secondary); border-left:4px solid var(--warning); padding:10px 16px; margin-bottom:16px; border-radius:4px; font-size:0.9rem; color:var(--text-secondary); line-height:1.5;">
+                        <strong>💡 操作提示：</strong><br>
+                        專屬低於 30mCi 以下門診吃藥病患排程，無須選擇床位。系統強制規定給藥日僅限「週一、週三、週四」。小劑量預約將同步整合顯示於排程月曆當天。
+                    </div>
+                    <div class="outpatient-header">
+                        <h3>小劑量預約 (限週一、三、四)</h3>
+                        <button class="btn-primary" id="add-outpatient-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            新增門診給藥
+                        </button>
+                    </div>
+                    <div class="bookings-table-wrapper">
+                        <table class="bookings-table">
+                            <thead>
+                                <tr>
+                                    <th>服用日期</th>
+                                    <th>病歷號 / 姓名</th>
                                     <th>劑量 (mCi)</th>
+                                    <th>劑型</th>
                                     <th>主治醫師</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
-                            <tbody id="bookings-tbody">
-                                <!-- Bookings will be generated by JS -->
+                            <tbody id="outpatient-tbody">
+                                <!-- Generated by JS -->
                             </tbody>
                         </table>
                     </div>
@@ -292,11 +469,21 @@
                             <p>依月份統計入住人數、床位使用率</p>
                             <div class="report-actions">
                                 <button class="btn-outline">預覽</button>
-                                <button class="btn-primary">下載 Excel</button>
+                                <button class="btn-primary" id="extract-month-report">一鍵下載月結報表</button>
                             </div>
                         </div>
                         <div class="report-card">
-                            <div class="report-icon">☢️</div>
+                            <div class="report-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="40"
+                                    height="40" style="color:var(--primary);">
+                                    <circle cx="12" cy="12" r="1"></circle>
+                                    <path
+                                        d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z">
+                                    </path>
+                                    <path
+                                        d="M15.7 3.8c-2.04-2.03-7.36-.02-11.9 4.5-4.54 4.52-6.54 9.87-4.5 11.9 2.04 2.03 7.36.02 11.9-4.5 4.54-4.52 6.54-9.87 4.5-11.9Z">
+                                    </path>
+                                </svg></div>
                             <h3>碘131劑量統計表</h3>
                             <p>輻防申報用劑量統計報表</p>
                             <div class="report-actions">
@@ -343,6 +530,35 @@
 
                 <!-- Admin Page (User Management) -->
                 <section id="admin-page" class="content-page">
+                    <!-- 系統設定 -->
+                    <div class="admin-header" style="margin-bottom:20px;">
+                        <h3>⚙️ 系統設定</h3>
+                    </div>
+                    <div
+                        style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;padding:16px;background:var(--bg-secondary);border-radius:12px;">
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0; margin-bottom: 8px;">
+                            防呆機制：設定距離實際入住日/給藥日前的天數。一旦低於設定天數，一般使用者將無法新增或修改對應的預約資料，需由管理員處理。
+                        </p>
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <label style="font-weight:500;min-width:180px;">🏥 住院預約鎖定天數</label>
+                            <input type="number" id="lock-days-inpatient" min="0" max="90"
+                                style="width:70px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.95rem;">
+                            <span style="color:var(--text-muted);font-size:0.85rem;">天</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <label style="font-weight:500;min-width:180px;">💊 小劑量預約鎖定天數</label>
+                            <input type="number" id="lock-days-outpatient" min="0" max="90"
+                                style="width:70px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.95rem;">
+                            <span style="color:var(--text-muted);font-size:0.85rem;">天</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <button class="btn-primary" id="save-lock-days"
+                                style="padding:6px 14px;font-size:0.85rem;">儲存鎖定設定</button>
+                            <span id="lock-days-hint" style="color:var(--text-muted);font-size:0.85rem;"></span>
+                        </div>
+                    </div>
+
+                    <!-- 使用者帳號管理 -->
                     <div class="admin-header">
                         <h3>使用者帳號管理</h3>
                         <button class="btn-primary" id="add-user-btn">
@@ -427,9 +643,22 @@
                         <input type="text" id="booking-doctor" placeholder="請輸入醫師名稱" required>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>備註</label>
-                    <textarea id="booking-notes" placeholder="選填"></textarea>
+                <!-- 新增：劑型與 Thyrogen -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>服用藥物劑型</label>
+                        <select id="booking-med-type">
+                            <option value="錠劑">錠劑</option>
+                            <option value="水劑">水劑</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>是否使用 Thyrogen</label>
+                        <select id="booking-thyrogen">
+                            <option value="false">否</option>
+                            <option value="true">是</option>
+                        </select>
+                    </div>
                 </div>
             </form>
             <div class="modal-footer">
@@ -490,6 +719,7 @@
                     <label>角色</label>
                     <select id="user-role-select" required>
                         <option value="user">一般使用者</option>
+                        <option value="pharmacist">藥師</option>
                         <option value="admin">系統管理員</option>
                     </select>
                 </div>
