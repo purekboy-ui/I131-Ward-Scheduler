@@ -9,12 +9,16 @@
       "vitest.config.js",
       "package.json",
       "package-lock.json",
-      "*.md",
+      "*.bak",
       "docs/**",
       "test_output.txt",
       "start_server.bat",
-      "*.bak",
-      "utils.test.js"
+      "utils.test.js",
+      "AGENTS.md",
+      "task.md",
+      "user_rules.md",
+      "1step.md",
+      "implementation_plan.md"
     ],
     "rewrites": []
   }
