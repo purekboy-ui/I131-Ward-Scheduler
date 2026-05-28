@@ -9,8 +9,6 @@
 const CONFIG = {
     BEDS: ['5B', '6B'],
     BOOKING_DAYS: [2, 5], // Tuesday, Friday
-    LOCK_DAYS_INPATIENT: 21,  // 住院預約鎖定天數
-    LOCK_DAYS_OUTPATIENT: 21, // 小劑量預約鎖定天數
     HOLIDAYS_2026: [
         '2026-01-01', '2026-01-29', '2026-01-30', '2026-01-31', // 元旦, 春節
         '2026-02-01', '2026-02-02', '2026-02-03',
@@ -26,28 +24,144 @@ const CONFIG = {
 // Mock Data
 // ============================================
 let mockUsers = [
-    { id: 1, username: 'admin', password: 'admin', role: 'admin', name: '系統管理員', isActive: true },
-    { id: 2, username: 'user', password: 'user', role: 'user', name: '一般使用者', isActive: true },
-    { id: 3, username: 'nurse01', password: 'nurse01', role: 'admin', name: '王護理師', isActive: true },
-    { id: 4, username: 'doc01', password: 'doc01', role: 'user', name: '陳醫師', isActive: false },
-    { id: 5, username: 'pharma', password: 'pharma', role: 'pharmacist', name: '藥師小王', isActive: true },
-    { id: 6, username: 'phar', password: 'phar', role: 'pharmacist', name: '藥師Demo', isActive: true },
+    { id: 1, username: 'admin', password: 'admin', role: 'manager', name: '系統管理員', isActive: true },
+    { id: 2, username: 'user', password: 'user', role: 'editor', name: '一般使用者', isActive: true },
 ];
+
+const ROLE_LABELS = {
+    manager: '管理員',
+    super_editor: '排程管理',
+    editor: '一般使用者',
+    viewer: '檢視'
+};
+
+function dosageFormToMedType(dosageForm) {
+    return dosageForm === 'Solution' ? '水劑' : '錠劑';
+}
+
+function getBookingField(booking, keys, fallback = undefined) {
+    for (const key of keys) {
+        if (booking[key] !== undefined && booking[key] !== null) return booking[key];
+    }
+    return fallback;
+}
+
+function normalizeBooleanValue(value) {
+    if (typeof value === 'string') {
+        return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
+    }
+    return Boolean(value);
+}
+
+function normalizeNumberValue(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeDateValue(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    return String(value).slice(0, 10);
+}
+
+// Keep booking reads/writes insulated from future data shape changes.
+function normalizeBooking(booking = {}) {
+    const bookingType = getBookingField(booking, ['bookingType', 'booking_type'])
+        || (normalizeBooleanValue(getBookingField(booking, ['isOutpatient', 'is_outpatient'])) ? 'outpatient' : 'inpatient');
+    const dosageForm = getBookingField(booking, ['dosageForm', 'dosage_form'])
+        || (getBookingField(booking, ['medType', 'med_type']) === '水劑' ? 'Solution' : 'Capsule');
+    const status = getBookingField(booking, ['status', 'booking_status'], '待確認');
+    const branch = getBookingField(booking, ['branch', 'hospital_branch'], '義大');
+    const radiotracer = getBookingField(booking, ['radiotracer', 'radiotracer_name'], 'I-131');
+    const chartNo = getBookingField(booking, ['chartNo', 'chart_no'], '');
+    const patientName = getBookingField(booking, ['patientName', 'patient_name'], '');
+    const doctor = getBookingField(booking, ['doctor', 'doctor_name'], '');
+    const date = normalizeDateValue(getBookingField(booking, ['date', 'booking_date'], ''));
+    const dose = normalizeNumberValue(getBookingField(booking, ['dose', 'doseMci', 'dose_mci'], null));
+    const isOutpatient = bookingType === 'outpatient';
+
+    return {
+        branch: '義大',
+        radiotracer: 'I-131',
+        dosageForm,
+        medType: getBookingField(booking, ['medType', 'med_type'], dosageFormToMedType(dosageForm)),
+        bookingType,
+        isOutpatient,
+        status,
+        reason: '',
+        medOrdered: false,
+        thyrogen: false,
+        ...booking,
+        id: getBookingField(booking, ['id', 'booking_id'], booking.id),
+        date,
+        bed: getBookingField(booking, ['bed', 'bed_code'], isOutpatient ? null : ''),
+        branch,
+        chartNo: String(chartNo || '').trim(),
+        patientName: String(patientName || '').trim(),
+        dose,
+        doctor: String(doctor || '').trim(),
+        radiotracer,
+        dosageForm,
+        medType: getBookingField(booking, ['medType', 'med_type'], dosageFormToMedType(dosageForm)),
+        bookingType,
+        isOutpatient,
+        status,
+        medOrdered: normalizeBooleanValue(getBookingField(booking, ['medOrdered', 'med_ordered'], false)),
+        thyrogen: normalizeBooleanValue(getBookingField(booking, ['thyrogen', 'use_thyrogen'], false)),
+        createdBy: getBookingField(booking, ['createdBy', 'created_by'], ''),
+        createdAt: getBookingField(booking, ['createdAt', 'created_at'], ''),
+        updatedAt: getBookingField(booking, ['updatedAt', 'updated_at'], ''),
+        updatedBy: getBookingField(booking, ['updatedBy', 'updated_by'], '')
+    };
+}
+
+function normalizeBookingCollection(bookings = []) {
+    return bookings.map((booking) => normalizeBooking(booking));
+}
+
+function upsertBookingRecord(nextBooking) {
+    const normalizedBooking = normalizeBooking(nextBooking);
+    const index = mockBookings.findIndex((booking) => booking.id === normalizedBooking.id);
+
+    if (index === -1) {
+        mockBookings.push(normalizedBooking);
+    } else {
+        mockBookings[index] = normalizedBooking;
+    }
+
+    return normalizedBooking;
+}
 
 let mockBookings = [
-    { id: 1, date: '2026-01-28', bed: '5B', chartNo: 'A123456789', patientName: '王小明', dose: 150, doctor: '王大明', createdBy: 'admin', createdAt: '2026-01-20 10:30', medType: '錠劑', thyrogen: false, medOrdered: false },
-    { id: 2, date: '2026-01-28', bed: '6B', chartNo: 'B987654321', patientName: '李美麗', dose: 100, doctor: '李小華', createdBy: 'admin', createdAt: '2026-01-21 14:15', medType: '水劑', thyrogen: true, medOrdered: true },
-    { id: 3, date: '2026-01-30', bed: '5B', chartNo: 'C246813579', patientName: '張大華', dose: 120, doctor: '陳建國', createdBy: 'user', createdAt: '2026-01-22 09:00', medType: '錠劑', thyrogen: false, medOrdered: false },
-    { id: 4, date: '2026-02-03', bed: '5B', chartNo: 'D135792468', patientName: '陳小娟', dose: 180, doctor: '王大明', createdBy: 'admin', createdAt: '2026-01-23 11:45', medType: '水劑', thyrogen: false, medOrdered: false },
-    { id: 5, date: '2026-02-03', bed: '6B', chartNo: 'E864209753', patientName: '林志明', dose: 130, doctor: '李小華', createdBy: 'user', createdAt: '2026-01-24 16:20', medType: '錠劑', thyrogen: true, medOrdered: true },
-    { id: 6, date: '2026-02-06', bed: '5B', chartNo: 'F579135246', patientName: '黃美玲', dose: 110, doctor: '陳建國', createdBy: 'admin', createdAt: '2026-01-25 08:30', medType: '錠劑', thyrogen: false, medOrdered: false },
+    { id: 1, date: '2026-05-29', bed: '5B', branch: '義大', chartNo: 'A123456789', patientName: '王小明', dose: 150, doctor: '王大明', createdBy: 'user', createdAt: '2026-05-21 10:30', radiotracer: 'I-131', dosageForm: 'Capsule', thyrogen: false, status: '待確認', medOrdered: false },
+    { id: 2, date: '2026-05-29', bed: '6B', branch: '癌醫', chartNo: 'B987654321', patientName: '李美麗', dose: 100, doctor: '李小華', createdBy: 'admin', createdAt: '2026-05-21 14:15', radiotracer: 'I-131', dosageForm: 'Solution', thyrogen: true, status: '已確認', medOrdered: true },
+    { id: 3, date: '2026-06-02', bed: '5B', branch: '大昌', chartNo: '', patientName: '待補資料', dose: null, doctor: '', createdBy: 'user', createdAt: '2026-05-22 09:00', radiotracer: 'I-131', dosageForm: 'Capsule', thyrogen: false, status: '待確認', medOrdered: false },
+    { id: 4, date: '2026-06-05', bed: '6B', branch: '義大', chartNo: 'F579135246', patientName: '黃美玲', dose: 110, doctor: '陳建國', createdBy: 'admin', createdAt: '2026-05-23 08:30', radiotracer: 'I-131', dosageForm: 'Capsule', thyrogen: false, status: '已確認', medOrdered: false },
+    { id: 5, date: '2026-06-01', bed: null, branch: '義大', chartNo: 'OP001', patientName: '吳佳穎', dose: 25, doctor: '王大明', createdBy: 'user', createdAt: '2026-05-24 08:45', radiotracer: 'I-131', dosageForm: 'Capsule', thyrogen: false, status: '待確認', medOrdered: false, bookingType: 'outpatient', isOutpatient: true },
+    { id: 6, date: '2026-06-01', bed: null, branch: '癌醫', chartNo: 'OP002', patientName: '張家淳', dose: 20, doctor: '李小華', createdBy: 'admin', createdAt: '2026-05-24 09:10', radiotracer: 'I-131', dosageForm: 'Solution', thyrogen: false, status: '已確認', medOrdered: false, bookingType: 'outpatient', isOutpatient: true },
+    { id: 7, date: '2026-06-01', bed: null, branch: '大昌', chartNo: 'OP003', patientName: '林怡如', dose: 15, doctor: '陳建國', createdBy: 'user', createdAt: '2026-05-24 09:25', radiotracer: 'I-131', dosageForm: 'Capsule', thyrogen: false, status: '待確認', medOrdered: false, bookingType: 'outpatient', isOutpatient: true },
 ];
+mockBookings = normalizeBookingCollection(mockBookings);
+
+let mockDoctors = Array.from(
+    new Set(
+        mockBookings
+            .map((booking) => (booking.doctor || '').trim())
+            .filter(Boolean)
+    )
+).map((name, index) => ({ id: index + 1, name }));
 
 let mockAuditLogs = [
-    { id: 1, userId: 'admin', action: 'CREATE', target: 'Booking', targetId: 1, detail: '新增預約：王小明 5B 2026-01-28', timestamp: '2026-01-20 10:30' },
-    { id: 2, userId: 'admin', action: 'CREATE', target: 'Booking', targetId: 2, detail: '新增預約：李美麗 6B 2026-01-28', timestamp: '2026-01-21 14:15' },
-    { id: 3, userId: 'admin', action: 'UPDATE', target: 'Booking', targetId: 1, detail: '修改劑量：100mCi → 150mCi', timestamp: '2026-01-22 09:30' },
-    { id: 4, userId: 'user', action: 'CREATE', target: 'Booking', targetId: 3, detail: '新增預約：張大華 5B 2026-01-30', timestamp: '2026-01-22 09:00' },
+    { id: 1, userId: 'user', action: 'CREATE', target: 'Booking', targetId: 1, detail: '新增預約：王小明 5B 2026-05-29', timestamp: '2026-05-21 10:30' },
+    { id: 2, userId: 'admin', action: 'CREATE', target: 'Booking', targetId: 2, detail: '新增預約：李美麗 6B 2026-05-29', timestamp: '2026-05-21 14:15' },
+    { id: 3, userId: 'admin', action: 'UPDATE', target: 'Booking', targetId: 2, detail: '確認收單：李美麗', timestamp: '2026-05-23 09:30' },
+    { id: 4, userId: 'user', action: 'CREATE', target: 'Booking', targetId: 3, detail: '新增預約：待補資料 5B 2026-06-02', timestamp: '2026-05-22 09:00' },
 ];
 
 // Admin overrides for specific dates/beds
@@ -61,9 +175,11 @@ let state = {
     currentPage: 'calendar',
     currentMonth: new Date().getMonth(),
     currentYear: new Date().getFullYear(),
+    calendarMode: 'inpatient',
     selectedDate: null,
     editingBooking: null,
     editingUser: null,
+    editingDoctor: null,
     contextMenuBooking: null,
     movingBooking: null,
     logsFiltered: false,
@@ -89,6 +205,19 @@ const utils = {
     formatWeekday(date) {
         const d = new Date(date);
         return d.toLocaleDateString('zh-TW', { weekday: 'short' });
+    },
+
+    formatWeekdayCompact(date) {
+        return this.formatWeekday(date).replace('週', '');
+    },
+
+    escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     isHoliday(dateStr) {
@@ -133,12 +262,17 @@ const utils = {
         return CONFIG.BEDS.every(bed => !this.isBedOpen(dateStr, bed));
     },
 
-    getBookingsForDate(dateStr) {
-        return mockBookings.filter(b => b.date === dateStr);
+    getBookingsForDate(dateStr, type = 'all') {
+        return mockBookings.filter((booking) => {
+            if (booking.date !== dateStr) return false;
+            if (type === 'inpatient') return !this.isOutpatientBooking(booking);
+            if (type === 'outpatient') return this.isOutpatientBooking(booking);
+            return true;
+        });
     },
 
     getBedStatus(dateStr, bed) {
-        return mockBookings.find(b => b.date === dateStr && b.bed === bed) || null;
+        return mockBookings.find(b => b.date === dateStr && !this.isOutpatientBooking(b) && b.bed === bed) || null;
     },
 
     generateId() {
@@ -147,6 +281,10 @@ const utils = {
 
     generateUserId() {
         return Math.max(...mockUsers.map(u => u.id), 0) + 1;
+    },
+
+    generateDoctorId() {
+        return Math.max(...mockDoctors.map(d => d.id), 0) + 1;
     },
 
     debounce(func, wait) {
@@ -161,25 +299,88 @@ const utils = {
         };
     },
 
+    isOutpatientBooking(booking) {
+        return booking.bookingType === 'outpatient' || booking.isOutpatient;
+    },
+
+    isManager() {
+        return state.currentUser?.role === 'manager';
+    },
+
+    isPrivilegedEditor() {
+        return state.currentUser?.role === 'manager' || state.currentUser?.role === 'super_editor';
+    },
+
+    canConfirmReceipt(booking) {
+        if (!state.currentUser) return false;
+        return this.isManager() && booking.status === '待確認' && this.hasCoreBookingData(booking);
+    },
+
+    getMissingCoreFields(booking) {
+        const missing = [];
+        if (!(booking.chartNo || '').trim()) missing.push('病歷號');
+        if (!(booking.patientName || '').trim()) missing.push('病人姓名');
+        if (!Number.isFinite(normalizeNumberValue(booking.dose))) missing.push('劑量');
+        if (!(booking.doctor || '').trim()) missing.push('主治醫師');
+        return missing;
+    },
+
+    hasCoreBookingData(booking) {
+        return this.getMissingCoreFields(booking).length === 0;
+    },
+
+    getRoleLabel(role) {
+        return ROLE_LABELS[role] || role;
+    },
+
+    getBookingTypeLabel(booking) {
+        return this.isOutpatientBooking(booking) ? '門診' : (booking.bed || '住院');
+    },
+
+    getBookingStatusMeta(status) {
+        if (status === '已確認') return { badgeClass: 'active', chipClass: 'confirmed', label: '已確認' };
+        if (status === '待確認') return { badgeClass: 'pending', chipClass: 'pending', label: '待確認' };
+        return { badgeClass: 'inactive', chipClass: 'inactive', label: status || '未設定' };
+    },
+
+    getBookingStatusClass(status) {
+        return this.getBookingStatusMeta(status).badgeClass;
+    },
+
+    formatDose(dose) {
+        return Number.isFinite(dose) ? `${dose}` : '待填';
+    },
+
+    syncDoctorDirectory(name) {
+        const normalizedName = (name || '').trim();
+        if (!normalizedName || mockDoctors.some((doctor) => doctor.name === normalizedName)) return;
+        mockDoctors.push({ id: this.generateDoctorId(), name: normalizedName });
+    },
+
+    ensureDoctorDirectory() {
+        mockBookings.forEach((booking) => {
+            this.syncDoctorDirectory(booking.doctor);
+        });
+    },
+
+    isOutpatientBookableDate(dateStr) {
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        date.setHours(0, 0, 0, 0);
+        return date >= today;
+    },
+
     canUserModify(booking) {
         if (!state.currentUser) return false;
 
-        // admin 擁有最高權限（可修改過去預約等）
-        if (state.currentUser.role === 'admin') return true;
+        if (this.isManager()) return true;
 
-        // 防呆：過去的預約資料不允許修改（一般使用者與藥師）
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const bookingDate = new Date(booking.date);
-        bookingDate.setHours(0, 0, 0, 0);
-        if (bookingDate < today) return false;
-        // 藥師不能修改預約
-        if (state.currentUser.role === 'pharmacist') return false;
-        // 一般使用者只能修改自己的預約
+        if (state.currentUser.role === 'viewer') return false;
+
         if (booking.createdBy !== state.currentUser.username) return false;
-        // 檢查鎖定期限
-        const lockType = booking.isOutpatient ? 'outpatient' : 'inpatient';
-        if (this.isLocked(booking.date, lockType)) return false;
+        if (booking.status === '已確認') return false;
         return true;
     },
 
@@ -191,19 +392,16 @@ const utils = {
         for (let i = 0; i < 90 && slots.length < limit; i++) {
             const dateStr = this.formatDateShort(checkDate);
 
-            // 排除被鎖定的日期（住院型）
-            if (!this.isLocked(dateStr, 'inpatient')) {
-                CONFIG.BEDS.forEach(bed => {
-                    if (slots.length >= limit) return;
-                    if (this.isBedOpen(dateStr, bed) && !this.getBedStatus(dateStr, bed)) {
-                        slots.push({
-                            date: dateStr,
-                            bed: bed,
-                            weekday: this.formatWeekday(checkDate)
-                        });
-                    }
-                });
-            }
+            CONFIG.BEDS.forEach(bed => {
+                if (slots.length >= limit) return;
+                if (this.isBedOpen(dateStr, bed) && !this.getBedStatus(dateStr, bed)) {
+                    slots.push({
+                        date: dateStr,
+                        bed: bed,
+                        weekday: this.formatWeekday(checkDate)
+                    });
+                }
+            });
 
             checkDate.setDate(checkDate.getDate() + 1);
         }
@@ -211,16 +409,86 @@ const utils = {
         return slots;
     },
 
-    // 防呆：距離入住日是否小於鎖定天數
-    isLocked(dateStr, type = 'inpatient') {
+    getUpcomingOutpatientSlots(limit = 10) {
+        const slots = [];
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const targetDate = new Date(dateStr);
-        targetDate.setHours(0, 0, 0, 0);
-        const diffTime = targetDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const lockDays = type === 'outpatient' ? CONFIG.LOCK_DAYS_OUTPATIENT : CONFIG.LOCK_DAYS_INPATIENT;
-        return diffDays < lockDays;
+        let checkDate = new Date(today);
+
+        for (let i = 0; i < 90 && slots.length < limit; i++) {
+            const dateStr = this.formatDateShort(checkDate);
+            if (this.isOutpatientBookableDate(dateStr)) {
+                slots.push({
+                    date: dateStr,
+                    weekday: this.formatWeekday(checkDate)
+                });
+            }
+            checkDate.setDate(checkDate.getDate() + 1);
+        }
+
+        return slots;
+    },
+
+    getCalendarMonthlyMetrics(year, month, mode = state.calendarMode) {
+        const totalDays = new Date(year, month + 1, 0).getDate();
+
+        if (mode === 'outpatient') {
+            const summary = {
+                confirmed: 0,
+                pending: 0,
+                total: 0,
+                scheduledDays: 0
+            };
+
+            for (let day = 1; day <= totalDays; day++) {
+                const dateStr = this.formatDateShort(new Date(year, month, day));
+                const bookings = this.getBookingsForDate(dateStr, 'outpatient');
+
+                if (bookings.length > 0) summary.scheduledDays += 1;
+
+                bookings.forEach((booking) => {
+                    const statusMeta = this.getBookingStatusMeta(booking.status);
+                    if (statusMeta.badgeClass === 'active') summary.confirmed += 1;
+                    else summary.pending += 1;
+                });
+            }
+
+            summary.total = summary.confirmed + summary.pending;
+            return summary;
+        }
+
+        const summary = {
+            confirmed: 0,
+            pending: 0,
+            available: 0,
+            closed: 0
+        };
+
+        for (let day = 1; day <= totalDays; day++) {
+            const dateStr = this.formatDateShort(new Date(year, month, day));
+
+            CONFIG.BEDS.forEach((bed) => {
+                if (!this.isBedOpen(dateStr, bed)) {
+                    summary.closed += 1;
+                    return;
+                }
+
+                const booking = this.getBedStatus(dateStr, bed);
+                if (!booking) {
+                    summary.available += 1;
+                    return;
+                }
+
+                const statusMeta = this.getBookingStatusMeta(booking.status);
+                if (statusMeta.badgeClass === 'active') summary.confirmed += 1;
+                else summary.pending += 1;
+            });
+        }
+
+        return summary;
+    },
+
+    isLocked(dateStr, type = 'inpatient') {
+        return false;
     },
 
     // 向後相容
@@ -243,10 +511,13 @@ const toast = {
         const icons = { success: '✓', error: '✕', warning: '⚠' };
         const toastEl = document.createElement('div');
         toastEl.className = `toast ${type}`;
-        toastEl.innerHTML = `
-            <span class="toast-icon">${icons[type]}</span>
-            <span class="toast-message">${message}</span>
-        `;
+        const iconEl = document.createElement('span');
+        iconEl.className = 'toast-icon';
+        iconEl.textContent = icons[type] || 'ℹ';
+        const messageEl = document.createElement('span');
+        messageEl.className = 'toast-message';
+        messageEl.textContent = String(message ?? '');
+        toastEl.append(iconEl, messageEl);
         this.container.appendChild(toastEl);
         setTimeout(() => {
             toastEl.style.animation = 'slideInRight 0.3s ease reverse';
@@ -267,7 +538,7 @@ function hideLoadingScreen() {
             loadingScreen.style.display = 'none';
             document.getElementById('login-page').style.display = 'flex';
         }, 500);
-    }, 1500);
+    }, 180);
 }
 
 // ============================================
@@ -295,25 +566,20 @@ const auth = {
         document.getElementById('dashboard').style.display = 'grid';
 
         document.getElementById('user-name').textContent = state.currentUser.name;
-        let displayRole = '一般使用者';
-        if (state.currentUser.role === 'admin') displayRole = '系統管理員';
-        if (state.currentUser.role === 'pharmacist') displayRole = '藥師';
-        document.getElementById('user-role').textContent = displayRole;
+        document.getElementById('user-role').textContent = utils.getRoleLabel(state.currentUser.role);
         document.getElementById('user-avatar').textContent = state.currentUser.name.charAt(0);
 
-        const adminItems = document.querySelectorAll('.admin-only');
-        adminItems.forEach(item => {
-            item.classList.toggle('visible', state.currentUser.role === 'admin');
+        document.querySelectorAll('.manager-only').forEach((item) => {
+            item.style.display = utils.isManager() ? 'flex' : 'none';
         });
-
-        // 藥師可見訂藥管理
-        const pharmaItems = document.querySelectorAll('.pharmacist-only');
-        pharmaItems.forEach(item => {
-            item.style.display = (state.currentUser.role === 'admin' || state.currentUser.role === 'pharmacist') ? '' : 'none';
+        document.querySelectorAll('.privileged-only').forEach((item) => {
+            item.style.display = utils.isPrivilegedEditor() ? 'flex' : 'none';
+        });
+        document.querySelectorAll('.staff-only').forEach((item) => {
+            item.style.display = state.currentUser?.role !== 'viewer' ? 'flex' : 'none';
         });
 
         calendar.render();
-        calendar.renderUpcomingSlots();
         bookings_module.render();
         auditLogs.render();
         admin.render();
@@ -374,10 +640,11 @@ const navigation = {
         document.getElementById(`${page}-page`).classList.add('active');
 
         const titles = {
-            calendar: '排程月曆',
+            calendar: '預約排程',
             bookings: '預約管理',
+            audit: '操作紀錄查詢',
             reports: '報表中心',
-            admin: '系統後台',
+            admin: '後台管理',
             medication: '訂藥管理',
             outpatient: '小劑量預約'
         };
@@ -388,7 +655,9 @@ const navigation = {
         // Render matching module
         if (page === 'calendar') calendar.render();
         if (page === 'bookings') bookings_module.render();
-        if (page === 'medication' && typeof medication_module !== 'undefined') medication_module.render();
+        if (page === 'audit') auditLogs.render();
+        if (page === 'admin') admin.render();
+        if (page === 'medication') medication_module.render();
         if (page === 'outpatient' && typeof outpatient_module !== 'undefined') outpatient_module.render();
         if (page === 'reports' && typeof report_module !== 'undefined') report_module.init();
     }
@@ -402,6 +671,25 @@ const calendar = {
         document.getElementById('prev-month').addEventListener('click', () => this.changeMonth(-1));
         document.getElementById('next-month').addEventListener('click', () => this.changeMonth(1));
         document.getElementById('today-btn').addEventListener('click', () => this.goToToday());
+        document.querySelectorAll('.mode-tab').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                state.calendarMode = tab.dataset.mode;
+                this.render();
+            });
+        });
+    },
+
+    updateModeTabs() {
+        document.querySelectorAll('.mode-tab').forEach((tab) => {
+            tab.classList.toggle('active', tab.dataset.mode === state.calendarMode);
+        });
+    },
+
+    updateWeekdayHighlights() {
+        const highlightDays = state.calendarMode === 'outpatient' ? [1, 3, 4] : [2, 5];
+        document.querySelectorAll('.calendar-weekdays .weekday').forEach((weekday, index) => {
+            weekday.classList.toggle('highlight', highlightDays.includes(index));
+        });
     },
 
     changeMonth(delta) {
@@ -424,27 +712,36 @@ const calendar = {
     },
 
     renderUpcomingSlots() {
-        const slots = utils.getUpcomingAvailableSlots(10);
+        const title = document.getElementById('upcoming-slots-title');
         const container = document.getElementById('upcoming-slots-list');
+        if (!container) return;
+        const isOutpatientMode = state.calendarMode === 'outpatient';
+        const slots = isOutpatientMode ? utils.getUpcomingOutpatientSlots(8) : utils.getUpcomingAvailableSlots(8);
+
+        if (title) {
+            title.textContent = isOutpatientMode ? '💊 最近可安排門診小劑量' : '🗓️ 最近可預約床位';
+        }
 
         if (slots.length === 0) {
-            container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">近期無可預約時段</span>';
+            container.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">近期無可${isOutpatientMode ? '安排門診小劑量' : '預約時段'}</span>`;
             return;
         }
 
         container.innerHTML = slots.map(slot => `
-            <div class="slot-chip bed-${slot.bed.toLowerCase()}" data-date="${slot.date}" data-bed="${slot.bed}">
+            <div class="slot-chip ${isOutpatientMode ? 'slot-chip-outpatient' : `bed-${slot.bed.toLowerCase()}`}" data-date="${slot.date}" ${slot.bed ? `data-bed="${slot.bed}"` : ''}>
                 <span>${slot.date.slice(5)} ${slot.weekday}</span>
-                <span class="bed">${slot.bed}</span>
+                <span class="bed">${isOutpatientMode ? '+新增' : slot.bed}</span>
             </div>
         `).join('');
 
         container.querySelectorAll('.slot-chip').forEach(chip => {
             chip.addEventListener('click', () => {
                 const date = chip.dataset.date;
-                const bed = chip.dataset.bed;
-                if (state.movingBooking) {
+                const bed = chip.dataset.bed || '';
+                if (state.movingBooking && !isOutpatientMode) {
                     this.moveBookingTo(date, bed);
+                } else if (isOutpatientMode) {
+                    outpatient_module.openModal(date);
                 } else {
                     modal.openNew(date, bed);
                 }
@@ -452,11 +749,23 @@ const calendar = {
         });
     },
 
+    renderSummary() {
+        const container = document.getElementById('calendar-mode-copy');
+        if (!container) return;
+
+        const summary = utils.getCalendarMonthlyMetrics(state.currentYear, state.currentMonth, state.calendarMode);
+        container.textContent = state.calendarMode === 'outpatient'
+            ? `門診小劑量：本月 ${summary.total} 筆，已確認 ${summary.confirmed} 筆、待確認 ${summary.pending} 筆，已分布在 ${summary.scheduledDays} 個給藥日。`
+            : `住院大劑量：本月已確認 ${summary.confirmed} 床次、待確認 ${summary.pending} 床次，尚有 ${summary.available} 床次可直接新增；灰色代表未開放。`;
+    },
+
     render() {
         const year = state.currentYear;
         const month = state.currentMonth;
 
         document.getElementById('calendar-title').textContent = `${year}年 ${month + 1}月`;
+        this.updateModeTabs();
+        this.updateWeekdayHighlights();
 
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
@@ -495,6 +804,7 @@ const calendar = {
             container.appendChild(this.createDayElement(i, true, null));
         }
 
+        this.renderSummary();
         this.renderUpcomingSlots();
     },
 
@@ -504,192 +814,146 @@ const calendar = {
 
         if (isOtherMonth) {
             dayEl.classList.add('other-month');
-            dayEl.innerHTML = `<div class="day-header"><span class="day-number">${dayNum}</span></div>`;
+            dayEl.innerHTML = `<div class="day-header"><div class="day-header-main"><span class="day-number">${dayNum}</span></div></div>`;
             return dayEl;
         }
 
-        const { dateStr, isToday, bookings, date, isFullyClosed } = data;
-
+        const { dateStr, isToday } = data;
         if (isToday) dayEl.classList.add('today');
 
-        // Fully closed day - simplified display
-        if (isFullyClosed && bookings.length === 0) {
+        return state.calendarMode === 'outpatient'
+            ? this.createOutpatientDayElement(dayEl, dayNum, dateStr)
+            : this.createInpatientDayElement(dayEl, dayNum, dateStr);
+    },
+
+    createInpatientDayElement(dayEl, dayNum, dateStr) {
+        const bookings = utils.getBookingsForDate(dateStr, 'inpatient');
+        const hasBookings = bookings.length > 0;
+        const anyOpen = CONFIG.BEDS.some((bed) => utils.isBedOpen(dateStr, bed));
+        const availableCount = CONFIG.BEDS.filter((bed) => utils.isBedOpen(dateStr, bed) && !utils.getBedStatus(dateStr, bed)).length;
+        const statusClass = !anyOpen ? 'closed' : availableCount === 2 ? 'available' : availableCount === 1 ? 'partial' : 'full';
+        const capacityText = !anyOpen ? '未開放' : availableCount === 2 ? '2床可排' : availableCount === 1 ? '1床可排' : '已滿';
+
+        if (!anyOpen && bookings.length === 0) {
             dayEl.classList.add('closed-day');
-            // 即使全部關床仍顯示門診標記
-            const opBookings = mockBookings.filter(b => b.date === dateStr && b.isOutpatient);
-            let closedContent = `<span class="day-number-centered">${dayNum}</span>`;
-            if (opBookings.length > 0) {
-                closedContent += `<div class="outpatient-indicator" style="font-size:0.7rem;background:var(--accent);color:#fff;border-radius:8px;padding:1px 6px;margin-top:2px;text-align:center;cursor:default;" title="${opBookings.map(b => b.patientName + ' ' + b.dose + 'mCi').join(', ')}">💊 小劑量×${opBookings.length}</div>`;
-            }
-            dayEl.innerHTML = closedContent;
-
-            // 任何非藥師使用者都可點擊（admin 管理床位，一般 user 看門診預約）
-            if (state.currentUser?.role !== 'pharmacist') {
-                dayEl.style.cursor = 'pointer';
-                dayEl.addEventListener('click', () => {
-                    dayModal.open(dateStr, utils.isHoliday(dateStr), bookings);
-                });
-            }
-            return dayEl;
         }
+        dayEl.classList.toggle('has-bookings', hasBookings);
+        dayEl.classList.toggle('quiet-day', !hasBookings);
+        dayEl.classList.toggle('availability-open', statusClass === 'available');
+        dayEl.classList.toggle('availability-partial', statusClass === 'partial');
+        dayEl.classList.toggle('availability-full', statusClass === 'full');
 
-        // Normal day with bed slots
-        dayEl.addEventListener('click', (e) => {
-            if (e.target.closest('.bed-slot')) return;
-
-            if (state.movingBooking) {
-                const availableBed = CONFIG.BEDS.find(bed =>
-                    utils.isBedOpen(dateStr, bed) && !utils.getBedStatus(dateStr, bed)
-                );
-                if (availableBed) {
-                    this.moveBookingTo(dateStr, availableBed);
-                } else {
-                    toast.show('該日期無可用床位', 'error');
-                }
-                return;
-            }
-
-            if (state.currentUser?.role !== 'pharmacist') {
-                dayModal.open(dateStr, utils.isHoliday(dateStr), bookings);
-            }
-        });
-
-        // Determine status
-        let statusClass = 'closed';
-        const anyOpen = CONFIG.BEDS.some(bed => utils.isBedOpen(dateStr, bed));
-
-        if (anyOpen) {
-            const availableCount = CONFIG.BEDS.filter(bed =>
-                utils.isBedOpen(dateStr, bed) && !utils.getBedStatus(dateStr, bed)
-            ).length;
-            if (availableCount === 2) statusClass = 'available';
-            else if (availableCount === 1) statusClass = 'partial';
-            else statusClass = 'full';
-        }
-
-        // Create bed slots
         let bedsHTML = '';
-        CONFIG.BEDS.forEach(bed => {
-            const booking = bookings.find(b => b.bed === bed);
+        CONFIG.BEDS.forEach((bed) => {
+            const booking = bookings.find((item) => item.bed === bed);
             const bedOpen = utils.isBedOpen(dateStr, bed);
-
             if (booking) {
-                const canModify = utils.canUserModify(booking);
-                const actionsHTML = canModify ? `
-                    <div class="slot-actions">
-                        <button class="slot-action-btn edit-slot" data-id="${booking.id}" title="編輯">✏️</button>
-                        <button class="slot-action-btn delete delete-slot" data-id="${booking.id}" title="刪除">🗑️</button>
-                    </div>
-                ` : '';
-
-                // 圖標：劑型 + Thyrogen + 醫師姓氏 + mCi
-                const medIcon = booking.medType === '水劑' ? '💧' : '💊';
-                const thyIcon = booking.thyrogen ? '<span title="Thyrogen" style="font-weight:800;color:#ff3b30;font-size:0.7rem;margin-left:2px;">T</span>' : '';
-                const docChar = booking.doctor ? booking.doctor.charAt(0) : '';
-                const infoHTML = `<div style="font-size:0.75rem;display:flex;gap:4px;align-items:center;opacity:0.95;margin-top:2px;width:100%;justify-content:space-between;">
-                                    <span>${medIcon}${thyIcon}<span style="color:var(--text-secondary);margin-left:4px;font-weight:500;">${docChar}</span></span>
-                                    <span style="font-weight:700;color:var(--text-primary);background:rgba(255,255,255,0.4);padding:1px 4px;border-radius:4px;">${booking.dose}mCi</span>
-                                  </div>`;
-
+                const statusMeta = utils.getBookingStatusMeta(booking.status);
+                const patientName = utils.escapeHtml(booking.patientName || '待補資料');
+                const doseText = utils.escapeHtml(`${utils.formatDose(booking.dose)} mCi`);
                 bedsHTML += `
-                    <div class="bed-slot occupied-${bed.toLowerCase()}" 
-                         data-booking-id="${booking.id}"
-                         ${canModify ? 'data-can-modify="true"' : ''}
-                         style="display:flex;flex-direction:column;align-items:flex-start;padding:6px 10px;color:var(--text-primary);border-left:4px solid var(--bed-${bed.toLowerCase()});">
-                        <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-                            <span class="bed-label" style="font-weight:700;font-size:0.8rem;">${bed}</span>
-                            <span class="bed-patient" style="font-weight:600;font-size:0.9rem;">${booking.patientName}</span>
-                        </div>
-                        ${infoHTML}
-                        ${actionsHTML}
-                    </div>
+                    <button type="button" class="bed-slot occupied-${bed.toLowerCase()} inpatient-booking-card has-booking booking-${statusMeta.chipClass}" data-booking-id="${booking.id}">
+                        <span class="slot-bed-tag">${bed}</span>
+                        <span class="bed-patient">${patientName}</span>
+                        <span class="slot-dose">${doseText}</span>
+                    </button>
                 `;
             } else if (bedOpen) {
                 bedsHTML += `
-                    <div class="bed-slot available" data-date="${dateStr}" data-bed="${bed}" style="opacity:0.7;border:1px dashed var(--border-color);">
-                        <span class="bed-label" style="font-weight:700;color:var(--text-muted);">${bed}</span>
-                        <span class="bed-patient" style="color:var(--text-muted);font-weight:500;">空床</span>
+                    <button type="button" class="bed-slot available calendar-add-btn quiet-slot" data-date="${dateStr}" data-bed="${bed}">
+                        <span class="slot-bed-tag">${bed}</span>
+                        <span class="slot-helper">空床，可預約</span>
+                    </button>
+                `;
+            } else {
+                bedsHTML += `
+                    <div class="bed-slot closed-bed-slot quiet-slot">
+                        <span class="slot-bed-tag">${bed}</span>
+                        <span class="slot-helper">關床</span>
                     </div>
                 `;
             }
         });
-        // 取得當天小劑量門診預約
-        const outpatientBookings = mockBookings.filter(b => b.date === dateStr && b.isOutpatient);
-        let outpatientHTML = '';
-        if (outpatientBookings.length > 0) {
-            outpatientHTML = `<div class="outpatient-indicator" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
-                ${outpatientBookings.map(b => `
-                    <div style="font-size:0.8rem;background:linear-gradient(135deg, var(--accent) 0%, var(--primary-dark) 100%);color:#fff;border-radius:6px;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,0.1);letter-spacing:0.5px;">
-                        <span style="font-weight:600;display:flex;align-items:center;gap:4px;">💊 ${b.patientName}</span>
-                        <span style="font-size:0.75rem;opacity:0.95;background:rgba(255,255,255,0.2);padding:1px 5px;border-radius:4px;font-weight:700;">${b.dose}mCi</span>
-                    </div>
-                `).join('')}
-            </div>`;
-        }
 
         dayEl.innerHTML = `
             <div class="day-header">
-                <span class="day-number">${dayNum}</span>
-                <span class="day-status ${statusClass}"></span>
+                <div class="day-header-main">
+                    <span class="day-number">${dayNum}</span>
+                    <span class="day-date-meta">${utils.formatWeekdayCompact(dateStr)}</span>
+                </div>
+                <span class="day-capacity ${statusClass}">${capacityText}</span>
             </div>
             <div class="day-beds">${bedsHTML}</div>
-            ${outpatientHTML}
         `;
 
-        // Click handlers
-        dayEl.querySelectorAll('.bed-slot.available').forEach(slot => {
-            slot.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const slotDate = slot.dataset.date;
-                const bed = slot.dataset.bed;
-                // 鎖定檢查交由 modal.openNew 內的 canUserModify 處理或在此前已用 canUserModify 篩選，此處不再重複
-                if (state.movingBooking) {
-                    this.moveBookingTo(slotDate, bed);
-                } else {
-                    modal.openNew(slotDate, bed);
-                }
+        dayEl.querySelectorAll('.calendar-add-btn').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                modal.openNew(button.dataset.date, button.dataset.bed);
             });
         });
 
-        dayEl.querySelectorAll('.bed-slot[data-booking-id]').forEach(slot => {
-            slot.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (e.target.closest('.slot-action-btn')) return;
-
-                const bookingId = parseInt(slot.dataset.bookingId);
-                const booking = mockBookings.find(b => b.id === bookingId);
+        dayEl.querySelectorAll('.inpatient-booking-card').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const booking = mockBookings.find((item) => item.id === parseInt(button.dataset.bookingId, 10));
                 if (booking && utils.canUserModify(booking)) {
                     modal.openEdit(booking);
                 }
             });
-
-            slot.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const bookingId = parseInt(slot.dataset.bookingId);
-                const booking = mockBookings.find(b => b.id === bookingId);
-                if (booking && utils.canUserModify(booking)) {
-                    contextMenu.show(e.clientX, e.clientY, booking);
-                }
-            });
         });
 
-        dayEl.querySelectorAll('.edit-slot').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = parseInt(btn.dataset.id);
-                const booking = mockBookings.find(b => b.id === id);
-                if (booking) modal.openEdit(booking);
+        if (utils.isPrivilegedEditor()) {
+            dayEl.addEventListener('click', (event) => {
+                if (event.target.closest('.bed-slot')) return;
+                dayModal.open(dateStr, utils.isHoliday(dateStr), bookings);
             });
-        });
+        }
 
-        dayEl.querySelectorAll('.delete-slot').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = parseInt(btn.dataset.id);
-                bookings_module.delete(id);
+        return dayEl;
+    },
+
+    createOutpatientDayElement(dayEl, dayNum, dateStr) {
+        const bookings = utils.getBookingsForDate(dateStr, 'outpatient');
+        const isBookableDate = utils.isOutpatientBookableDate(dateStr);
+
+        const visibleBookings = bookings.slice(0, 3).map((booking) => `
+            <div class="outpatient-pill" title="${utils.escapeHtml(booking.patientName || '待補資料')} ${utils.escapeHtml(utils.formatDose(booking.dose))} mCi">
+                <span class="outpatient-name">${utils.escapeHtml(booking.patientName || '待補資料')}</span>
+                <span class="outpatient-dose">${utils.escapeHtml(utils.formatDose(booking.dose))} mCi</span>
+            </div>
+        `).join('');
+        const hiddenCount = bookings.length - 3;
+        const collapseBadge = hiddenCount > 0 ? `<div class="outpatient-more">+${hiddenCount}筆</div>` : '';
+        const addButton = isBookableDate
+            ? `<button type="button" class="outpatient-add-btn" data-date="${dateStr}" aria-label="新增門診小劑量">+</button>`
+            : '';
+        const capacityText = bookings.length > 0 ? `${bookings.length}筆` : isBookableDate ? '可排' : '停診';
+        const capacityTone = bookings.length > 0 || isBookableDate ? 'available' : 'closed';
+        const emptyText = isBookableDate ? '尚無門診需求' : '非門診日';
+
+        dayEl.innerHTML = `
+            <div class="day-header">
+                <div class="day-header-main">
+                    <span class="day-number">${dayNum}</span>
+                    <span class="day-date-meta">${utils.formatWeekdayCompact(dateStr)}</span>
+                </div>
+                <span class="day-capacity ${capacityTone}">${capacityText}</span>
+            </div>
+            <div class="outpatient-day-body">
+                <div class="outpatient-list">${visibleBookings || `<span class="outpatient-empty">${emptyText}</span>`}</div>
+                ${collapseBadge}
+                ${addButton}
+            </div>
+        `;
+
+        const addBtn = dayEl.querySelector('.outpatient-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                outpatient_module.openModal(addBtn.dataset.date);
             });
-        });
+        }
 
         return dayEl;
     },
@@ -700,6 +964,12 @@ const calendar = {
         const booking = state.movingBooking;
         const oldDate = booking.date;
         const oldBed = booking.bed;
+
+        if (!utils.canUserModify(booking)) {
+            toast.show('您沒有權限移動此預約', 'error');
+            this.cancelMove();
+            return;
+        }
 
         if (!utils.isBedOpen(newDate, newBed)) {
             toast.show('該床位未開放', 'error');
@@ -754,7 +1024,8 @@ const auditLogs = {
 
     render(filteredLogs = null) {
         const container = document.getElementById('audit-list');
-        const logs = filteredLogs || mockAuditLogs.slice(0, 10); // Default: last 10
+        if (!container) return;
+        const logs = filteredLogs || mockAuditLogs.slice(0, 20);
 
         const icons = { CREATE: '➕', UPDATE: '✏️', DELETE: '🗑️', OVERRIDE: '🔧' };
 
@@ -767,8 +1038,8 @@ const auditLogs = {
             <div class="audit-item">
                 <span class="audit-icon">${icons[log.action] || '📝'}</span>
                 <div class="audit-content">
-                    <div class="audit-detail">${log.detail}</div>
-                    <div class="audit-meta">${log.userId} • ${log.timestamp}</div>
+                    <div class="audit-detail">${utils.escapeHtml(log.detail)}</div>
+                    <div class="audit-meta">${utils.escapeHtml(log.userId)} • ${utils.escapeHtml(log.timestamp)}</div>
                 </div>
             </div>
         `).join('');
@@ -825,14 +1096,14 @@ const dayModal = {
         document.getElementById('day-modal-title').textContent = `${utils.formatDate(dateStr)} 管理`;
 
         document.getElementById('day-info').innerHTML = `
-            <h4>${utils.formatDate(dateStr)}</h4>
-            <p>${weekday}${isHoliday ? ' • 國定假日' : ''}</p>
+            <h4>${utils.escapeHtml(utils.formatDate(dateStr))}</h4>
+            <p>${utils.escapeHtml(`${weekday}${isHoliday ? ' • 國定假日' : ''}`)}</p>
         `;
 
         const bedsControl = document.getElementById('day-beds-control');
-        const isAdmin = state.currentUser?.role === 'admin';
+        const isAdmin = utils.isManager();
 
-        // 非 admin 隱藏床位控制區
+        // 非 Manager 隱藏床位控制區
         if (!isAdmin) {
             bedsControl.innerHTML = '';
             bedsControl.style.display = 'none';
@@ -865,15 +1136,15 @@ const dayModal = {
         }
 
         const bookingsList = document.getElementById('day-bookings-list');
-        // 住院預約（只有 admin 才顯示）
+        // 住院預約（只有 Manager 才顯示）
         if (isAdmin && bookings.length > 0) {
             bookingsList.innerHTML = `
                 <h5>當日住院預約</h5>
                 ${bookings.map(b => `
                     <div class="day-booking-item">
                         <span class="bed-badge bed-${b.bed.toLowerCase()}">${b.bed}</span>
-                        <span>${b.patientName}</span>
-                        <span style="color: var(--text-muted)">${b.doctor}</span>
+                        <span>${utils.escapeHtml(b.patientName)}</span>
+                        <span style="color: var(--text-muted)">${utils.escapeHtml(b.doctor)}</span>
                     </div>
                 `).join('')}
             `;
@@ -885,9 +1156,7 @@ const dayModal = {
 
         // 小劑量預約區塊
         const dateObj = new Date(dateStr);
-        const dayOfWeek = dateObj.getDay(); // 0=Sun, 1=Mon, ...
-        const isOutpatientDay = [1, 3, 4].includes(dayOfWeek); // 週一三四
-        const opBookings = mockBookings.filter(b => b.date === dateStr && b.isOutpatient);
+        const opBookings = mockBookings.filter(b => b.date === dateStr && utils.isOutpatientBooking(b));
         const todayForOp = new Date();
         todayForOp.setHours(0, 0, 0, 0);
         dateObj.setHours(0, 0, 0, 0);
@@ -898,16 +1167,14 @@ const dayModal = {
             opHTML += `<h5 style="margin-top:12px;">💊 當日小劑量服藥</h5>`;
             opHTML += opBookings.map(b => `
                 <div class="day-booking-item" style="justify-content:space-between;">
-                    <span>${b.patientName} <span style="color:var(--text-muted);font-size:0.85rem;">${b.dose}mCi ${b.medType || '錠劑'}</span></span>
+                    <span>${utils.escapeHtml(b.patientName)} <span style="color:var(--text-muted);font-size:0.85rem;">${utils.escapeHtml(`${b.dose}mCi ${b.medType || '錠劑'}`)}</span></span>
                     ${utils.canUserModify(b) ? `<button class="btn-sm delete delete-op-cal" data-id="${b.id}" style="padding:2px 6px;font-size:0.75rem;">刪除</button>` : ''}
                 </div>
             `).join('');
         }
 
-        if (isOutpatientDay && !isPastDate && state.currentUser?.role !== 'pharmacist') {
+        if (!isPastDate && state.currentUser?.role !== 'viewer') {
             opHTML += `<button class="btn-primary" id="add-op-from-cal" style="margin-top:8px;width:100%;padding:6px;font-size:0.85rem;">➕ 新增小劑量預約 (<30mCi)</button>`;
-        } else if (!isOutpatientDay) {
-            opHTML += `<p style="color:var(--text-muted);font-size:0.8rem;margin-top:8px;text-align:center;">小劑量預約僅開放週一、三、四</p>`;
         }
 
         bookingsList.insertAdjacentHTML('beforeend', opHTML);
@@ -950,6 +1217,7 @@ const dayModal = {
 
         calendar.render();
         auditLogs.render();
+        admin.render();
         toast.show(`${bed} 床位已${isOpen ? '開放' : '關閉'}`, 'success');
     },
 
@@ -997,6 +1265,10 @@ const contextMenu = {
                 modal.openEdit(this.booking);
                 break;
             case 'move':
+                if (!utils.canUserModify(this.booking)) {
+                    toast.show('您沒有權限移動此預約', 'error');
+                    break;
+                }
                 state.movingBooking = this.booking;
                 document.body.style.cursor = 'move';
                 toast.show('請點擊目標日期/床位', 'warning');
@@ -1030,19 +1302,13 @@ const bookings_module = {
             document.getElementById('search-input').value = '';
             this.render();
         });
-        // 包含小劑量門診 checkbox
-        const opCheckbox = document.getElementById('booking-include-op');
-        if (opCheckbox) opCheckbox.addEventListener('change', () => this.render());
     },
 
     render(filter = '') {
         const tbody = document.getElementById('bookings-tbody');
-        const includeOp = document.getElementById('booking-include-op')?.checked;
         let data = [...mockBookings];
-        if (!includeOp) data = data.filter(b => !b.isOutpatient);
         data.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        // 日期區間篩選
         const startDateVal = document.getElementById('booking-filter-start')?.value;
         const endDateVal = document.getElementById('booking-filter-end')?.value;
         if (startDateVal) data = data.filter(b => b.date >= startDateVal);
@@ -1052,88 +1318,92 @@ const bookings_module = {
         if (filter) {
             const f = filter.toLowerCase();
             data = data.filter(b =>
-                b.patientName.toLowerCase().includes(f) ||
-                b.chartNo.toLowerCase().includes(f) ||
-                b.doctor.toLowerCase().includes(f) ||
+                (b.patientName || '').toLowerCase().includes(f) ||
+                (b.chartNo || '').toLowerCase().includes(f) ||
+                (b.doctor || '').toLowerCase().includes(f) ||
+                (b.branch || '').toLowerCase().includes(f) ||
                 (b.createdBy || '').toLowerCase().includes(f)
             );
         }
 
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="padding: 32px; text-align: center; color: var(--text-muted);">目前沒有符合條件的預約</td></tr>';
+            return;
+        }
+
         tbody.innerHTML = data.map(booking => {
             const canModify = utils.canUserModify(booking);
-            const typeBadge = booking.isOutpatient
-                ? '<span class="bed-badge" style="background:#f0fff4;color:#38a169;">小劑量</span>'
-                : `<span class="bed-badge bed-${booking.bed.toLowerCase()}">${booking.bed}</span>`;
-            const createdByUser = mockUsers.find(u => u.username === booking.createdBy);
-            const createdByName = createdByUser ? createdByUser.name : (booking.createdBy || '-');
+            const canConfirm = utils.canConfirmReceipt(booking);
+            const statusMeta = utils.getBookingStatusMeta(booking.status);
+            const needsCoreData = utils.isManager() && booking.status === '待確認' && !utils.hasCoreBookingData(booking);
+            const actionButtons = [
+                needsCoreData ? '<span class="table-muted-text">待補資料</span>' : '',
+                canConfirm ? `<button class="btn-text-action confirm-btn" data-id="${booking.id}">收單</button>` : '',
+                canModify ? `<button class="btn-text-action edit-btn" data-id="${booking.id}">編輯</button>` : '',
+                canModify ? `<button class="btn-text-action danger delete-btn" data-id="${booking.id}">刪除</button>` : ''
+            ].filter(Boolean).join('');
+            const rowClass = `booking-row booking-row-${statusMeta.badgeClass}`;
+            const branch = utils.escapeHtml(booking.branch || '義大');
+            const patientName = utils.escapeHtml(booking.patientName || '待補資料');
+            const chartNo = utils.escapeHtml(booking.chartNo || '病歷待補');
+            const doctor = utils.escapeHtml(booking.doctor || '待補');
+            const doseText = `${utils.formatDose(booking.dose)} mCi`;
+            const doseClass = Number.isFinite(booking.dose) && booking.dose >= 120 ? 'booking-dose-text high' : 'booking-dose-text';
+            const medName = booking.radiotracer || 'I-131';
+            const bookingLocation = utils.escapeHtml(utils.isOutpatientBooking(booking) ? '門診小劑量' : `${booking.bed || '住院'} 床位`);
+            const medMeta = utils.escapeHtml(`${medName} · ${booking.dosageForm || 'Capsule'}${booking.thyrogen ? ' · Thyrogen' : ''} · ${booking.medOrdered ? '已訂藥' : '未訂藥'}`);
+
             return `
-                <tr>
-                    <td>${utils.formatDate(booking.date)}</td>
-                    <td>${typeBadge}</td>
-                    <td>${booking.chartNo}</td>
-                    <td>${booking.patientName}</td>
-                    <td>${booking.dose} mCi</td>
-                    <td>${booking.medType === '水劑' ? '<span style="color:#e53e3e;font-weight:700;">💧 水劑</span>' : (booking.medType || '錠劑')}</td>
-                    <td>${booking.isOutpatient ? '-' : (booking.thyrogen ? '✅' : '-')}</td>
-                    <td>${booking.isOutpatient ? '-' : `<span class="status-badge ${booking.medOrdered ? 'active' : 'inactive'}">${booking.medOrdered ? '已訂藥' : '未訂藥'}</span>`}</td>
-                    <td>${booking.doctor}</td>
-                    <td><span style="font-size:0.85rem;color:var(--text-muted);">${createdByName}</span></td>
+                <tr class="${rowClass}">
+                    <td class="sticky-action-col">
+                        <div class="table-actions-text">${actionButtons || '<span class="table-muted-text">無可執行操作</span>'}</div>
+                    </td>
+                    <td><span class="status-badge ${statusMeta.badgeClass}">${statusMeta.label}</span></td>
                     <td>
-                        <div class="action-btns">
-                            ${canModify && !booking.isOutpatient ? `
-                                <button class="btn-sm edit-btn" data-id="${booking.id}" title="編輯">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                    </svg>
-                                </button>
-                                <button class="btn-sm move-btn" data-id="${booking.id}" title="移動">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M5 9l-3 3 3 3"/>
-                                        <path d="M9 5l3-3 3 3"/>
-                                        <path d="M15 19l3-3-3-3"/>
-                                        <path d="M19 9l-3 3 3 3"/>
-                                        <path d="M2 12h20"/>
-                                        <path d="M12 2v20"/>
-                                    </svg>
-                                </button>
-                                <button class="btn-sm delete delete-btn" data-id="${booking.id}" title="刪除">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="3 6 5 6 21 6"/>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                    </svg>
-                                </button>
-                            ` : (canModify && booking.isOutpatient ? `
-                                <button class="btn-sm delete delete-btn" data-id="${booking.id}" title="刪除">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="3 6 5 6 21 6"/>
-                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                    </svg>
-                                </button>
-                            ` : '<span style="color: var(--text-muted); font-size: 0.75rem;">無權限</span>')}
+                        <div class="booking-date-cell">
+                            <span class="booking-date-text">${utils.formatDate(booking.date)}</span>
+                            <span class="booking-patient-meta">${new Date(booking.date).toLocaleDateString('zh-TW', { weekday: 'long' })}</span>
                         </div>
                     </td>
+                    <td>
+                        <div class="booking-location-cell">
+                            <span class="booking-branch">${branch}</span>
+                            <span class="booking-patient-meta">${bookingLocation}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="booking-patient-cell">
+                            <div class="booking-patient-line">
+                                <span class="booking-patient-name">${patientName}</span>
+                            </div>
+                            <span class="booking-patient-meta">${chartNo}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="booking-med-cell">
+                            <div class="booking-med-top">
+                                <span class="${doseClass}">${utils.escapeHtml(doseText)}</span>
+                            </div>
+                            <span class="booking-med-meta">${medMeta}</span>
+                        </div>
+                    </td>
+                    <td>${booking.doctor ? doctor : '<span class="table-muted-text">待補</span>'}</td>
                 </tr>
             `;
         }).join('');
 
+        tbody.querySelectorAll('.confirm-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.confirmReceipt(parseInt(btn.dataset.id));
+            });
+        });
         tbody.querySelectorAll('.edit-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = parseInt(btn.dataset.id);
                 const booking = mockBookings.find(b => b.id === id);
-                if (booking) modal.openEdit(booking);
-            });
-        });
-
-        tbody.querySelectorAll('.move-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = parseInt(btn.dataset.id);
-                const booking = mockBookings.find(b => b.id === id);
                 if (booking) {
-                    state.movingBooking = booking;
-                    document.body.style.cursor = 'move';
-                    navigation.goTo('calendar');
-                    toast.show('請在月曆上點擊目標日期/床位', 'warning');
+                    if (utils.isOutpatientBooking(booking)) outpatient_module.openEdit(booking);
+                    else modal.openEdit(booking);
                 }
             });
         });
@@ -1147,6 +1417,41 @@ const bookings_module = {
 
     search(query) {
         this.render(query);
+    },
+
+    confirmReceipt(id) {
+        const booking = mockBookings.find((item) => item.id === id);
+        if (!booking) return;
+        if (!utils.isManager() || booking.status !== '待確認') {
+            toast.show('您沒有確認收單權限', 'error');
+            return;
+        }
+        const missingFields = utils.getMissingCoreFields(booking);
+        if (missingFields.length > 0) {
+            toast.show(`請先補齊：${missingFields.join('、')}`, 'error');
+            return;
+        }
+
+        upsertBookingRecord({
+            ...booking,
+            status: '已確認',
+            updatedAt: new Date().toLocaleString('zh-TW'),
+            updatedBy: state.currentUser.username
+        });
+        mockAuditLogs.unshift({
+            id: mockAuditLogs.length + 1,
+            userId: state.currentUser.username,
+            action: 'UPDATE',
+            target: 'Booking',
+            targetId: booking.id,
+            detail: `確認收單：${booking.patientName || booking.chartNo || booking.id}`,
+            timestamp: new Date().toLocaleString('zh-TW')
+        });
+        this.render();
+        calendar.render();
+        auditLogs.render();
+        auth.updateStats();
+        toast.show('已確認收單', 'success');
     },
 
     delete(id) {
@@ -1170,7 +1475,7 @@ const bookings_module = {
                 action: 'DELETE',
                 target: 'Booking',
                 targetId: id,
-                detail: `刪除${isPast ? '【歷史】' : ''}預約：${booking.patientName} ${booking.bed} ${booking.date}`,
+                detail: `刪除${isPast ? '【歷史】' : ''}預約：${booking.patientName || '待補資料'} ${utils.isOutpatientBooking(booking) ? '門診' : booking.bed} ${booking.date}`,
                 timestamp: new Date().toLocaleString('zh-TW')
             });
 
@@ -1210,21 +1515,13 @@ const modal = {
         state.editingBooking = null;
         document.getElementById('modal-title').textContent = '新增預約';
         this.form.reset();
+        document.getElementById('booking-branch').value = '義大';
+        document.getElementById('booking-radiotracer').value = 'I-131';
+        document.getElementById('booking-dosage-form').value = 'Capsule';
 
-        // 鎖定與過去日期檢查
-        if (date && state.currentUser?.role !== 'admin') {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const bookingDate = new Date(date);
-            bookingDate.setHours(0, 0, 0, 0);
-            if (bookingDate < today) {
-                toast.show('無法新增過去的預約', 'error');
-                return;
-            }
-            if (utils.isLocked(date, 'inpatient')) {
-                toast.show(`距離入住不足 ${CONFIG.LOCK_DAYS_INPATIENT} 天，已鎖定`, 'warning');
-                return;
-            }
+        if (state.currentUser?.role === 'viewer') {
+            toast.show('Viewer 僅能查看，無法新增預約', 'error');
+            return;
         }
 
         if (date) document.getElementById('booking-date').value = date;
@@ -1232,6 +1529,8 @@ const modal = {
             const radio = this.form.querySelector(`input[name="bed"][value="${bed}"]`);
             if (radio) radio.checked = true;
         }
+
+        renderDoctorOptions();
 
         this.element.classList.add('active');
     },
@@ -1248,13 +1547,14 @@ const modal = {
         document.getElementById('modal-title').textContent = '編輯預約';
 
         document.getElementById('booking-date').value = booking.date;
-        document.getElementById('booking-chart').value = booking.chartNo;
-        document.getElementById('booking-name').value = booking.patientName;
-        document.getElementById('booking-dose').value = booking.dose;
-        document.getElementById('booking-doctor').value = booking.doctor;
-
-        const medTypeEl = document.getElementById('booking-med-type');
-        if (medTypeEl) medTypeEl.value = booking.medType || '錠劑';
+        document.getElementById('booking-branch').value = booking.branch || '義大';
+        document.getElementById('booking-chart').value = booking.chartNo || '';
+        document.getElementById('booking-name').value = booking.patientName || '';
+        document.getElementById('booking-dose').value = Number.isFinite(booking.dose) ? booking.dose : '';
+        renderDoctorOptions();
+        document.getElementById('booking-doctor').value = booking.doctor || '';
+        document.getElementById('booking-radiotracer').value = booking.radiotracer || 'I-131';
+        document.getElementById('booking-dosage-form').value = booking.dosageForm || 'Capsule';
         const thyrogenEl = document.getElementById('booking-thyrogen');
         if (thyrogenEl) thyrogenEl.value = booking.thyrogen ? 'true' : 'false';
 
@@ -1270,16 +1570,29 @@ const modal = {
     },
 
     save() {
+        const doseValue = document.getElementById('booking-dose').value.trim();
         const formData = {
             date: document.getElementById('booking-date').value,
             bed: this.form.querySelector('input[name="bed"]:checked')?.value,
-            chartNo: document.getElementById('booking-chart').value,
-            patientName: document.getElementById('booking-name').value,
-            dose: parseInt(document.getElementById('booking-dose').value),
-            doctor: document.getElementById('booking-doctor').value,
-            medType: document.getElementById('booking-med-type') ? document.getElementById('booking-med-type').value : '錠劑',
+            branch: document.getElementById('booking-branch').value,
+            chartNo: document.getElementById('booking-chart').value.trim(),
+            patientName: document.getElementById('booking-name').value.trim(),
+            dose: doseValue ? parseInt(doseValue, 10) : null,
+            doctor: document.getElementById('booking-doctor').value.trim(),
+            radiotracer: document.getElementById('booking-radiotracer').value.trim() || 'I-131',
+            dosageForm: document.getElementById('booking-dosage-form').value,
+            medType: dosageFormToMedType(document.getElementById('booking-dosage-form').value),
             thyrogen: document.getElementById('booking-thyrogen') ? document.getElementById('booking-thyrogen').value === 'true' : false,
+            status: state.editingBooking?.status || '待確認',
+            bookingType: 'inpatient',
+            isOutpatient: false
         };
+
+        const missingFields = utils.getMissingCoreFields(formData);
+        if (formData.status === '已確認' && missingFields.length > 0) {
+            toast.show(`請先補齊：${missingFields.join('、')}`, 'error');
+            return;
+        }
 
         if (!formData.bed) {
             toast.show('請選擇床位', 'error');
@@ -1304,12 +1617,14 @@ const modal = {
         if (state.editingBooking) {
             const index = mockBookings.findIndex(b => b.id === state.editingBooking.id);
             if (index !== -1) {
-                const oldDose = mockBookings[index].dose;
-                mockBookings[index] = {
+                const oldBooking = { ...mockBookings[index] };
+                utils.syncDoctorDirectory(formData.doctor);
+                upsertBookingRecord({
                     ...mockBookings[index],
                     ...formData,
-                    updatedAt: new Date().toLocaleString('zh-TW')
-                };
+                    updatedAt: new Date().toLocaleString('zh-TW'),
+                    updatedBy: state.currentUser.username
+                });
 
                 const isPast = new Date(formData.date) < new Date(new Date().setHours(0, 0, 0, 0));
                 mockAuditLogs.unshift({
@@ -1318,7 +1633,7 @@ const modal = {
                     action: 'UPDATE',
                     target: 'Booking',
                     targetId: state.editingBooking.id,
-                    detail: `修改${isPast ? '【歷史】' : ''}預約：${formData.patientName}，劑量 ${oldDose}mCi → ${formData.dose}mCi`,
+                    detail: `修改${isPast ? '【歷史】' : ''}預約：${formData.patientName || oldBooking.patientName || '待補資料'}，狀態 ${oldBooking.status} → ${formData.status}`,
                     timestamp: new Date().toLocaleString('zh-TW')
                 });
 
@@ -1332,7 +1647,8 @@ const modal = {
                 createdBy: state.currentUser.username,
                 createdAt: new Date().toLocaleString('zh-TW')
             };
-            mockBookings.push(newBooking);
+            utils.syncDoctorDirectory(formData.doctor);
+            upsertBookingRecord(newBooking);
 
             mockAuditLogs.unshift({
                 id: mockAuditLogs.length + 1,
@@ -1340,7 +1656,7 @@ const modal = {
                 action: 'CREATE',
                 target: 'Booking',
                 targetId: newBooking.id,
-                detail: `新增預約：${formData.patientName} ${formData.bed} ${formData.date}`,
+                detail: `新增預約：${formData.patientName || '待補資料'} ${formData.bed} ${formData.date} (${formData.status})`,
                 timestamp: new Date().toLocaleString('zh-TW')
             });
 
@@ -1356,6 +1672,33 @@ const modal = {
 };
 
 // ============================================
+// Shared Master Data
+// ============================================
+function renderDoctorOptions() {
+    utils.ensureDoctorDirectory();
+    const options = mockDoctors
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'))
+        .map((doctor) => `<option value="${utils.escapeHtml(doctor.name)}">${utils.escapeHtml(doctor.name)}</option>`)
+        .join('');
+    const selectConfigs = [
+        { id: 'booking-doctor', placeholder: '請選擇主治醫師' },
+        { id: 'op-booking-doctor', placeholder: '請選擇主治醫師' },
+        { id: 'report-doctor', placeholder: '全部醫師' }
+    ];
+
+    selectConfigs.forEach(({ id, placeholder }) => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const currentValue = select.value;
+        select.innerHTML = `<option value="">${utils.escapeHtml(placeholder)}</option>${options}`;
+        if (currentValue && [...select.options].some((option) => option.value === currentValue)) {
+            select.value = currentValue;
+        }
+    });
+}
+
+// ============================================
 // Admin Module (User Management)
 // ============================================
 const admin = {
@@ -1363,57 +1706,166 @@ const admin = {
         document.getElementById('add-user-btn').addEventListener('click', () => {
             userModal.openNew();
         });
-
-        // 鎖定天數設定（住院 + 小劑量）
-        const lockInp = document.getElementById('lock-days-inpatient');
-        const lockOp = document.getElementById('lock-days-outpatient');
-        const saveBtn = document.getElementById('save-lock-days');
-        const hint = document.getElementById('lock-days-hint');
-        if (lockInp) lockInp.value = CONFIG.LOCK_DAYS_INPATIENT;
-        if (lockOp) lockOp.value = CONFIG.LOCK_DAYS_OUTPATIENT;
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                const valInp = parseInt(lockInp.value);
-                const valOp = parseInt(lockOp.value);
-                if (isNaN(valInp) || valInp < 0 || valInp > 90 || isNaN(valOp) || valOp < 0 || valOp > 90) {
-                    toast.show('請輸入 0~90 的整數', 'error');
-                    return;
-                }
-                const oldInp = CONFIG.LOCK_DAYS_INPATIENT;
-                const oldOp = CONFIG.LOCK_DAYS_OUTPATIENT;
-                CONFIG.LOCK_DAYS_INPATIENT = valInp;
-                CONFIG.LOCK_DAYS_OUTPATIENT = valOp;
-                if (hint) hint.textContent = `已儲存（住院 ${oldInp}→${valInp}天，小劑量 ${oldOp}→${valOp}天）`;
-                mockAuditLogs.unshift({
-                    id: mockAuditLogs.length + 1,
-                    userId: state.currentUser.username,
-                    action: 'CONFIG',
-                    target: 'System',
-                    targetId: 0,
-                    detail: `變更鎖定天數：住院 ${oldInp}→${valInp}天，小劑量 ${oldOp}→${valOp}天`,
-                    timestamp: new Date().toLocaleString('zh-TW')
-                });
-                calendar.renderUpcomingSlots();
-                toast.show('鎖定天數已更新', 'success');
-            });
+        document.getElementById('add-doctor-btn')?.addEventListener('click', () => {
+            doctorModal.openNew();
+        });
+        renderDoctorOptions();
+        const bedDateInput = document.getElementById('admin-bed-date');
+        if (bedDateInput) {
+            bedDateInput.value = bedDateInput.value || normalizeDateValue(new Date());
+            bedDateInput.addEventListener('change', () => this.renderBedPanel());
         }
     },
 
+    renderOverview() {
+        const container = document.getElementById('admin-overview');
+        if (!container) return;
+        const pendingBookings = mockBookings.filter((booking) => booking.status === '待確認').length;
+        const unorderedBookings = mockBookings.filter((booking) => !utils.isOutpatientBooking(booking) && !booking.medOrdered).length;
+        const activeUsers = mockUsers.filter((user) => user.isActive).length;
+
+        container.innerHTML = [
+            { label: '主治醫師', value: mockDoctors.length, meta: '同步排程與報表下拉選單' },
+            { label: '啟用帳號', value: activeUsers, meta: `共 ${mockUsers.length} 個帳號，含停用紀錄` },
+            { label: '待確認預約', value: pendingBookings, meta: '需要補齊資料或完成收單' },
+            { label: '未訂藥', value: unorderedBookings, meta: '住院預約需優先核對劑量' }
+        ].map((item) => `
+            <div class="admin-overview-card">
+                <span class="admin-overview-label">${item.label}</span>
+                <strong class="admin-overview-value">${item.value}</strong>
+                <span class="admin-overview-meta">${item.meta}</span>
+            </div>
+        `).join('');
+    },
+
+    renderBedPanel() {
+        const panel = document.getElementById('admin-bed-panel');
+        const dateInput = document.getElementById('admin-bed-date');
+        if (!panel || !dateInput) return;
+
+        const selectedDate = dateInput.value || normalizeDateValue(new Date());
+        dateInput.value = selectedDate;
+
+        const cards = CONFIG.BEDS.map((bed) => {
+            const booking = utils.getBedStatus(selectedDate, bed);
+            const isOpen = utils.isBedOpen(selectedDate, bed);
+            const isBooked = Boolean(booking);
+            const summary = isBooked
+                ? `${booking.patientName || '未填姓名'} · ${utils.formatDoseDisplay(booking.dose)}`
+                : (isOpen ? '空床，可預約' : '未開床');
+            const meta = isBooked
+                ? `${booking.chartNo || '未填病歷號'} · ${booking.status || '待確認'}`
+                : (isOpen ? '此床位目前開放中' : '關閉後月曆不顯示可預約');
+            const checked = isOpen ? 'checked' : '';
+            const disabled = isBooked ? 'disabled' : '';
+            const statusClass = isBooked ? 'booked' : (isOpen ? 'open' : 'closed');
+            return `
+                <section class="admin-bed-card ${statusClass}">
+                    <div class="admin-bed-card-top">
+                        <div>
+                            <div class="admin-bed-label">${bed}</div>
+                            <div class="admin-bed-meta">${utils.escapeHtml(meta)}</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="admin-bed-toggle" data-bed="${bed}" ${checked} ${disabled}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="admin-bed-summary">${utils.escapeHtml(summary)}</div>
+                    ${isBooked ? '<div class="admin-bed-note">已有預約，請先調整或移除預約後再變更床位開關。</div>' : ''}
+                </section>
+            `;
+        }).join('');
+
+        panel.innerHTML = cards;
+        panel.querySelectorAll('.admin-bed-toggle').forEach((toggle) => {
+            toggle.addEventListener('change', (event) => {
+                const { bed } = event.target.dataset;
+                this.toggleBedOverride(selectedDate, bed, event.target.checked);
+            });
+        });
+    },
+
+    toggleBedOverride(dateStr, bed, isOpen) {
+        if (!utils.isManager()) {
+            toast.show('僅管理者可調整床位開關', 'error');
+            this.renderBedPanel();
+            return;
+        }
+        if (utils.getBedStatus(dateStr, bed)) {
+            toast.show('該床已有預約，無法直接關閉', 'error');
+            this.renderBedPanel();
+            return;
+        }
+        dayModal.toggleBed(dateStr, bed, isOpen);
+        this.renderBedPanel();
+    },
+
     render() {
-        if (state.currentUser?.role !== 'admin') return;
+        if (!utils.isManager()) return;
 
-        // 同步鎖定天數
-        const lockInp = document.getElementById('lock-days-inpatient');
-        const lockOp = document.getElementById('lock-days-outpatient');
-        if (lockInp) lockInp.value = CONFIG.LOCK_DAYS_INPATIENT;
-        if (lockOp) lockOp.value = CONFIG.LOCK_DAYS_OUTPATIENT;
-
-        const roleNames = { admin: '管理員', pharmacist: '藥師', user: '使用者' };
+        utils.ensureDoctorDirectory();
+        this.renderOverview();
+        this.renderBedPanel();
+        renderDoctorOptions();
+        const roleNames = ROLE_LABELS;
+        const doctorsTbody = document.getElementById('doctors-tbody');
         const tbody = document.getElementById('users-tbody');
+        if (doctorsTbody) {
+            doctorsTbody.innerHTML = mockDoctors
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'))
+                .map((doctor) => {
+                    const usageCount = mockBookings.filter((booking) => booking.doctor === doctor.name).length;
+                    const safeName = utils.escapeHtml(doctor.name);
+                    return `
+                        <tr>
+                            <td>${safeName}</td>
+                            <td>${usageCount}</td>
+                            <td>
+                                <div class="action-btns">
+                                    <button class="btn-text-action edit-doctor-btn" data-id="${doctor.id}">編輯</button>
+                                    <button class="btn-text-action danger delete-doctor-btn" data-id="${doctor.id}">刪除</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            doctorsTbody.querySelectorAll('.edit-doctor-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const doctor = mockDoctors.find((item) => item.id === parseInt(btn.dataset.id, 10));
+                    if (doctor) doctorModal.openEdit(doctor);
+                });
+            });
+            doctorsTbody.querySelectorAll('.delete-doctor-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const doctor = mockDoctors.find((item) => item.id === parseInt(btn.dataset.id, 10));
+                    if (!doctor) return;
+                    if (mockBookings.some((booking) => booking.doctor === doctor.name)) {
+                        toast.show('仍有預約使用此醫師，請先改名或調整預約資料', 'error');
+                        return;
+                    }
+                    mockDoctors = mockDoctors.filter((item) => item.id !== doctor.id);
+                    mockAuditLogs.unshift({
+                        id: mockAuditLogs.length + 1,
+                        userId: state.currentUser.username,
+                        action: 'DELETE',
+                        target: 'Doctor',
+                        targetId: doctor.id,
+                        detail: `刪除主治醫師：${doctor.name}`,
+                        timestamp: new Date().toLocaleString('zh-TW')
+                    });
+                    renderDoctorOptions();
+                    this.render();
+                    auditLogs.render();
+                    toast.show('主治醫師已刪除', 'success');
+                });
+            });
+        }
         tbody.innerHTML = mockUsers.map(user => `
             <tr>
-                <td>${user.username}</td>
-                <td>${user.name}</td>
+                <td>${utils.escapeHtml(user.username)}</td>
+                <td>${utils.escapeHtml(user.name)}</td>
                 <td><span class="role-badge ${user.role}">${roleNames[user.role] || user.role}</span></td>
                 <td><span class="status-badge ${user.isActive ? 'active' : 'inactive'}">${user.isActive ? '啟用' : '停用'}</span></td>
                 <td>
@@ -1446,7 +1898,17 @@ const admin = {
                 const user = mockUsers.find(u => u.id === parseInt(btn.dataset.id));
                 if (user) {
                     user.isActive = !user.isActive;
+                    mockAuditLogs.unshift({
+                        id: mockAuditLogs.length + 1,
+                        userId: state.currentUser.username,
+                        action: 'UPDATE',
+                        target: 'User',
+                        targetId: user.id,
+                        detail: `${user.username} 權限帳號已${user.isActive ? '啟用' : '停用'}`,
+                        timestamp: new Date().toLocaleString('zh-TW')
+                    });
                     this.render();
+                    auditLogs.render();
                     toast.show(`帳號已${user.isActive ? '啟用' : '停用'}`, 'success');
                 }
             });
@@ -1515,10 +1977,21 @@ const userModal = {
         if (state.editingUser) {
             const user = mockUsers.find(u => u.id === state.editingUser.id);
             if (user) {
+                const previousRole = user.role;
+                const previousStatus = user.isActive;
                 if (password) user.password = password;
                 user.name = name;
                 user.role = role;
                 user.isActive = isActive;
+                mockAuditLogs.unshift({
+                    id: mockAuditLogs.length + 1,
+                    userId: state.currentUser.username,
+                    action: 'UPDATE',
+                    target: 'User',
+                    targetId: user.id,
+                    detail: `更新使用者 ${user.username}：角色 ${utils.getRoleLabel(previousRole)}→${utils.getRoleLabel(role)}，狀態 ${previousStatus ? '啟用' : '停用'}→${isActive ? '啟用' : '停用'}`,
+                    timestamp: new Date().toLocaleString('zh-TW')
+                });
                 toast.show('使用者資料已更新', 'success');
             }
         } else {
@@ -1535,11 +2008,115 @@ const userModal = {
                 role,
                 isActive
             });
+            mockAuditLogs.unshift({
+                id: mockAuditLogs.length + 1,
+                userId: state.currentUser.username,
+                action: 'CREATE',
+                target: 'User',
+                targetId: username,
+                detail: `新增使用者 ${username}（${utils.getRoleLabel(role)}）`,
+                timestamp: new Date().toLocaleString('zh-TW')
+            });
             toast.show('使用者已新增', 'success');
         }
 
         this.close();
         admin.render();
+        auditLogs.render();
+    }
+};
+
+const doctorModal = {
+    element: null,
+    form: null,
+
+    init() {
+        this.element = document.getElementById('doctor-modal');
+        this.form = document.getElementById('doctor-form');
+        if (!this.element || !this.form) return;
+
+        document.getElementById('doctor-modal-close').addEventListener('click', () => this.close());
+        document.getElementById('doctor-modal-cancel').addEventListener('click', () => this.close());
+        this.element.querySelector('.modal-backdrop').addEventListener('click', () => this.close());
+        this.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.save();
+        });
+    },
+
+    openNew() {
+        state.editingDoctor = null;
+        document.getElementById('doctor-modal-title').textContent = '新增主治醫師';
+        document.getElementById('doctor-name-input').value = '';
+        this.element.classList.add('active');
+    },
+
+    openEdit(doctor) {
+        state.editingDoctor = doctor;
+        document.getElementById('doctor-modal-title').textContent = '編輯主治醫師';
+        document.getElementById('doctor-name-input').value = doctor.name;
+        this.element.classList.add('active');
+    },
+
+    close() {
+        this.element.classList.remove('active');
+        state.editingDoctor = null;
+    },
+
+    save() {
+        const name = document.getElementById('doctor-name-input').value.trim();
+        if (!name) {
+            toast.show('請輸入醫師名稱', 'error');
+            return;
+        }
+
+        const duplicated = mockDoctors.find((doctor) =>
+            doctor.name === name && doctor.id !== state.editingDoctor?.id
+        );
+        if (duplicated) {
+            toast.show('醫師名稱已存在', 'error');
+            return;
+        }
+
+        if (state.editingDoctor) {
+            const originalName = state.editingDoctor.name;
+            state.editingDoctor.name = name;
+            mockBookings.forEach((booking) => {
+                if (booking.doctor === originalName) booking.doctor = name;
+            });
+            mockAuditLogs.unshift({
+                id: mockAuditLogs.length + 1,
+                userId: state.currentUser.username,
+                action: 'UPDATE',
+                target: 'Doctor',
+                targetId: state.editingDoctor.id,
+                detail: `修改主治醫師：${originalName} → ${name}`,
+                timestamp: new Date().toLocaleString('zh-TW')
+            });
+            toast.show('主治醫師已更新', 'success');
+        } else {
+            mockDoctors.push({ id: utils.generateDoctorId(), name });
+            mockAuditLogs.unshift({
+                id: mockAuditLogs.length + 1,
+                userId: state.currentUser.username,
+                action: 'CREATE',
+                target: 'Doctor',
+                targetId: name,
+                detail: `新增主治醫師：${name}`,
+                timestamp: new Date().toLocaleString('zh-TW')
+            });
+            toast.show('主治醫師已新增', 'success');
+        }
+
+        renderDoctorOptions();
+        this.close();
+        admin.render();
+        bookings_module.render();
+        outpatient_module.render();
+        medication_module.render();
+        calendar.render();
+        report_module.renderPreview();
+        auditLogs.render();
     }
 };
 
@@ -1654,7 +2231,7 @@ const medication_module = {
     },
 
     getFilteredData(searchQuery = '') {
-        let filtered = mockBookings.filter(b => !b.isOutpatient);
+        let filtered = mockBookings.filter(b => !utils.isOutpatientBooking(b));
         const startVal = document.getElementById('med-filter-start')?.value;
         const endVal = document.getElementById('med-filter-end')?.value;
         if (startVal) filtered = filtered.filter(b => b.date >= startVal);
@@ -1664,7 +2241,7 @@ const medication_module = {
         if (showOnlyUnordered) filtered = filtered.filter(b => !b.medOrdered);
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(b => b.chartNo.toLowerCase().includes(q) || b.patientName.toLowerCase().includes(q));
+            filtered = filtered.filter(b => (b.chartNo || '').toLowerCase().includes(q) || (b.patientName || '').toLowerCase().includes(q));
         }
         filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
         return filtered;
@@ -1674,11 +2251,10 @@ const medication_module = {
         const tbody = document.getElementById('medication-tbody');
         if (!tbody) return;
         const role = state.currentUser?.role;
-        if (role !== 'admin' && role !== 'pharmacist') {
+        if (!utils.isPrivilegedEditor()) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--error);">無權限檢視此頁面</td></tr>`;
             return;
         }
-        const isPharmacist = (role === 'pharmacist');
         let filtered = this.getFilteredData(searchQuery);
 
         if (filtered.length === 0) {
@@ -1692,20 +2268,39 @@ const medication_module = {
             const btnText = isOrdered ? '取消訂藥' : '確認訂藥';
             const btnClass = isOrdered ? 'btn-outline' : 'btn-primary';
             const thyrogenBadge = b.thyrogen ? `<span class="bed-badge" style="background:var(--accent);">Yes</span>` : `<span style="color:var(--text-muted)">-</span>`;
-            // 藥師：劑量/劑型均唯讀
-            const doseDisabled = (isOrdered || isPharmacist) ? 'disabled' : '';
+            const doseDisabled = isOrdered ? 'disabled' : '';
+            const patientName = utils.escapeHtml(b.patientName || '待補資料');
+            const chartNo = utils.escapeHtml(b.chartNo || '病歷待補');
+            const dateText = utils.escapeHtml(b.date);
+            const weekday = utils.escapeHtml(new Date(b.date).toLocaleDateString('zh-TW', { weekday: 'short' }));
+            const branch = utils.escapeHtml(b.branch || '義大');
+            const doseText = utils.escapeHtml(`${utils.formatDose(b.dose)} mCi`);
             return `<tr>
-                <td><div style="font-weight:500">${b.date}</div><div style="font-size:0.85rem;color:var(--text-muted)">${new Date(b.date).toLocaleDateString('zh-TW', { weekday: 'short' })}</div></td>
+                <td><div class="booking-date-cell"><span class="booking-date-text">${dateText}</span><span class="booking-patient-meta">${weekday}</span></div></td>
                 <td><span class="bed-badge bed-${b.bed.toLowerCase()}">${b.bed}</span></td>
-                <td><div style="font-weight:500">${b.patientName}</div><div class="mono" style="font-size:0.85rem;color:var(--text-muted)">${b.chartNo}</div></td>
-                <td><div style="display:flex;gap:8px;align-items:center;"><input type="number" class="med-dose-input" data-id="${b.id}" value="${b.dose}" style="width:70px;padding:4px;" ${doseDisabled}> mCi
-                    <select class="med-type-select" data-id="${b.id}" style="padding:4px;${b.medType === '水劑' ? 'background:#fff0f0;color:#e53e3e;font-weight:700;border:2px solid #e53e3e;' : ''}" ${doseDisabled}>
+                <td>
+                    <div class="med-review-cell">
+                        <span class="med-patient-name">${patientName}</span>
+                        <span class="med-patient-chart">${chartNo}</span>
+                        <span class="table-inline-hint">${branch}</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="med-review-cell">
+                        <span class="med-dose-pill">${doseText}</span>
+                        <div class="med-inline-editors">
+                            <input type="number" class="med-dose-input" data-id="${b.id}" value="${Number.isFinite(b.dose) ? b.dose : ''}" ${doseDisabled}>
+                            <select class="med-type-select" data-id="${b.id}" style="${b.medType === '水劑' ? 'background:#fff0f0;color:#e53e3e;font-weight:700;border:2px solid #e53e3e;' : ''}" ${doseDisabled}>
                         <option value="錠劑" ${b.medType === '錠劑' || !b.medType ? 'selected' : ''}>💊 錠劑</option>
                         <option value="水劑" ${b.medType === '水劑' ? 'selected' : ''}>💧 水劑</option>
-                    </select></div></td>
+                            </select>
+                        </div>
+                    </div>
+                </td>
                 <td>${thyrogenBadge}</td>
-                <td><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                <td><div class="med-order-stack">
                     <span class="${statusClass}">${statusText}</span>
+                    <span class="med-order-status">${isOrdered ? '已完成訂藥核對' : '請先核對病人、病歷號與劑量'}</span>
                     <button class="${btnClass} med-toggle-btn" data-id="${b.id}" style="padding:4px 8px;font-size:0.85rem;">${btnText}</button>
                 </div></td>
             </tr>`;
@@ -1782,12 +2377,12 @@ const medication_module = {
         `;
         data.forEach(b => {
             html += `<tr>
-                <td>${b.date}</td>
-                <td class="text-center">${b.bed}</td>
-                <td>${b.chartNo}</td>
-                <td>${b.patientName}</td>
-                <td class="text-center">${b.dose}</td>
-                <td class="text-center">${b.medType || '錠劑'}</td>
+                <td>${utils.escapeHtml(b.date)}</td>
+                <td class="text-center">${utils.escapeHtml(b.bed)}</td>
+                <td>${utils.escapeHtml(b.chartNo)}</td>
+                <td>${utils.escapeHtml(b.patientName)}</td>
+                <td class="text-center">${utils.escapeHtml(b.dose)}</td>
+                <td class="text-center">${utils.escapeHtml(b.medType || '錠劑')}</td>
                 <td class="text-center">${b.thyrogen ? 'Yes' : 'No'}</td>
                 <td class="text-center">${b.medOrdered ? '已訂藥' : '未訂藥'}</td>
             </tr>`;
@@ -1837,6 +2432,8 @@ const medication_module = {
 // Outpatient Module (小劑量預約)
 // ============================================
 const outpatient_module = {
+    editingBooking: null,
+
     init() {
         const addBtn = document.getElementById('add-outpatient-btn');
         if (addBtn) addBtn.addEventListener('click', () => this.openModal());
@@ -1861,22 +2458,43 @@ const outpatient_module = {
                     </button>
                 </div>
                 <form id="op-booking-form" class="modal-body">
-                    <div class="form-row"><div class="form-group">
-                        <label>給藥日期 (僅限週一、三、四)</label>
-                        <input type="date" id="op-booking-date" required>
-                        <div id="op-date-error" style="color:var(--error);font-size:0.8rem;margin-top:4px;display:none;">僅開放星期一、三、四</div>
-                    </div></div>
-                    <div class="form-row">
-                        <div class="form-group"><label>病歷號</label><input type="text" id="op-booking-chart" placeholder="例：A123456789" required></div>
-                        <div class="form-group"><label>病患姓名</label><input type="text" id="op-booking-name" placeholder="請輸入姓名" required></div>
+                    <div class="form-section">
+                        <div class="form-section-title">門診小劑量基本資料</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>給藥日期</label>
+                                <input type="date" id="op-booking-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label>院區</label>
+                                <select id="op-booking-branch">
+                                    <option value="義大">義大</option>
+                                    <option value="癌醫">癌醫</option>
+                                    <option value="大昌">大昌</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>服用劑量 (<30mCi)</label><input type="number" id="op-booking-dose" placeholder="例：29" max="29" required></div>
-                        <div class="form-group"><label>主治醫師</label><input type="text" id="op-booking-doctor" placeholder="請輸入醫師名稱" required></div>
+                    <div class="form-section">
+                        <div class="form-section-title">病患資料（未齊可先待確認）</div>
+                        <div class="form-row">
+                            <div class="form-group"><label>病歷號</label><input type="text" id="op-booking-chart" placeholder="例：A123456789"></div>
+                            <div class="form-group"><label>病患姓名</label><input type="text" id="op-booking-name" placeholder="尚未取得可先留空"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>服用劑量 (<30mCi)</label><input type="number" id="op-booking-dose" placeholder="例：29" max="29"></div>
+                            <div class="form-group"><label>主治醫師</label><select id="op-booking-doctor"><option value="">請選擇主治醫師</option></select></div>
+                        </div>
                     </div>
-                    <div class="form-row"><div class="form-group"><label>劑型</label>
-                        <select id="op-booking-med-type"><option value="錠劑">錠劑</option><option value="水劑">水劑</option></select>
-                    </div></div>
+                    <div class="form-section">
+                        <div class="form-section-title">用藥資訊</div>
+                        <div class="form-row">
+                            <div class="form-group"><label>藥品</label><input type="text" id="op-booking-radiotracer" value="I-131"></div>
+                            <div class="form-group"><label>劑型</label>
+                                <select id="op-booking-dosage-form"><option value="Capsule">Capsule</option><option value="Solution">Solution</option></select>
+                            </div>
+                        </div>
+                    </div>
                 </form>
                 <div class="modal-footer">
                     <button type="button" class="btn-outline" id="op-modal-cancel">取消</button>
@@ -1887,22 +2505,13 @@ const outpatient_module = {
         m.querySelector('#op-modal-close').addEventListener('click', () => this.closeModal());
         m.querySelector('#op-modal-cancel').addEventListener('click', () => this.closeModal());
         m.querySelector('.modal-backdrop').addEventListener('click', () => this.closeModal());
-        const dateInput = m.querySelector('#op-booking-date');
-        const dateError = m.querySelector('#op-date-error');
-        const saveBtn = m.querySelector('#op-save-btn');
-        dateInput.addEventListener('change', () => {
-            const d = new Date(dateInput.value);
-            const day = d.getDay();
-            if (![1, 3, 4].includes(day)) { dateError.style.display = 'block'; saveBtn.disabled = true; }
-            else { dateError.style.display = 'none'; saveBtn.disabled = false; }
-        });
         m.querySelector('#op-booking-form').addEventListener('submit', (e) => { e.preventDefault(); this.save(); });
     },
 
     render() {
         const tbody = document.getElementById('outpatient-tbody');
         if (!tbody) return;
-        let filtered = mockBookings.filter(b => b.isOutpatient);
+        let filtered = mockBookings.filter(b => utils.isOutpatientBooking(b));
         filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
         if (filtered.length === 0) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:var(--space-xl);">目前無小劑量預約</td></tr>`;
@@ -1910,15 +2519,25 @@ const outpatient_module = {
         }
         tbody.innerHTML = filtered.map(b => {
             const canModify = utils.canUserModify(b);
+            const dateText = utils.escapeHtml(b.date);
+            const weekday = utils.escapeHtml(new Date(b.date).toLocaleDateString('zh-TW', { weekday: 'short' }));
+            const patientName = utils.escapeHtml(b.patientName || '待補資料');
+            const chartNo = utils.escapeHtml(b.chartNo || '待補');
+            const doseText = utils.escapeHtml(`${utils.formatDose(b.dose)} mCi`);
+            const dosageForm = utils.escapeHtml(b.dosageForm || 'Capsule');
+            const doctor = utils.escapeHtml(b.doctor || '待補');
             return `<tr>
-                <td><div style="font-weight:500">${b.date}</div><div style="font-size:0.85rem;color:var(--text-muted)">${new Date(b.date).toLocaleDateString('zh-TW', { weekday: 'short' })}</div></td>
-                <td><div style="font-weight:500">${b.patientName}</div><div class="mono" style="font-size:0.85rem;color:var(--text-muted)">${b.chartNo}</div></td>
-                <td><div style="font-weight:600;color:var(--primary)">${b.dose} mCi</div></td>
-                <td>${b.medType || '錠劑'}</td>
-                <td>${b.doctor}</td>
-                <td>${canModify ? `<button class="btn-icon delete delete-op-btn" data-id="${b.id}" title="刪除">🗑️</button>` : ''}</td>
+                <td><div style="font-weight:500">${dateText}</div><div style="font-size:0.85rem;color:var(--text-muted)">${weekday}</div></td>
+                <td><div style="font-weight:500">${patientName}</div><div class="mono" style="font-size:0.85rem;color:var(--text-muted)">${chartNo}</div></td>
+                <td><div style="font-weight:700;color:var(--primary)">${doseText}</div></td>
+                <td>${dosageForm}</td>
+                <td>${doctor}</td>
+                <td>${canModify ? `<div class="action-btns"><button class="btn-text-action edit-op-btn" data-id="${b.id}">編輯</button><button class="btn-text-action danger delete-op-btn" data-id="${b.id}">刪除</button></div>` : ''}</td>
             </tr>`;
         }).join('');
+        tbody.querySelectorAll('.edit-op-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.openEdit(mockBookings.find(b => b.id === parseInt(btn.dataset.id, 10))));
+        });
         tbody.querySelectorAll('.delete-op-btn').forEach(btn => {
             btn.addEventListener('click', () => this.delete(parseInt(btn.dataset.id)));
         });
@@ -1927,66 +2546,120 @@ const outpatient_module = {
     openModal(prefillDate = '') {
         const m = document.getElementById('outpatient-modal');
         if (!m) return;
+        if (state.currentUser?.role === 'viewer') {
+            toast.show('Viewer 僅能查看，無法新增門診預約', 'error');
+            return;
+        }
+        this.editingBooking = null;
+        m.querySelector('.modal-header h3').textContent = '新增小劑量預約 (<30mCi)';
         document.getElementById('op-booking-form').reset();
-        document.getElementById('op-date-error').style.display = 'none';
-        document.getElementById('op-save-btn').disabled = false;
+        document.getElementById('op-booking-branch').value = '義大';
+        document.getElementById('op-booking-radiotracer').value = 'I-131';
+        document.getElementById('op-booking-dosage-form').value = 'Capsule';
+        renderDoctorOptions();
         if (prefillDate) {
             document.getElementById('op-booking-date').value = prefillDate;
         }
         m.classList.add('active');
     },
 
+    openEdit(booking) {
+        if (!booking || !utils.canUserModify(booking)) {
+            toast.show('您沒有權限編輯此門診預約', 'error');
+            return;
+        }
+        this.editingBooking = booking;
+        const m = document.getElementById('outpatient-modal');
+        if (!m) return;
+        m.querySelector('.modal-header h3').textContent = '編輯小劑量預約';
+        document.getElementById('op-booking-date').value = booking.date;
+        document.getElementById('op-booking-branch').value = booking.branch || '義大';
+        document.getElementById('op-booking-chart').value = booking.chartNo || '';
+        document.getElementById('op-booking-name').value = booking.patientName || '';
+        document.getElementById('op-booking-dose').value = Number.isFinite(booking.dose) ? booking.dose : '';
+        renderDoctorOptions();
+        document.getElementById('op-booking-doctor').value = booking.doctor || '';
+        document.getElementById('op-booking-radiotracer').value = booking.radiotracer || 'I-131';
+        document.getElementById('op-booking-dosage-form').value = booking.dosageForm || 'Capsule';
+        document.getElementById('outpatient-modal').classList.add('active');
+    },
+
     closeModal() {
         const m = document.getElementById('outpatient-modal');
         if (m) m.classList.remove('active');
+        this.editingBooking = null;
     },
 
     save() {
-        const dose = parseFloat(document.getElementById('op-booking-dose').value);
-        if (dose >= 30) { toast.show('小劑量預約必須 < 30mCi', 'error'); return; }
-        const newBooking = {
-            id: utils.generateId(),
-            date: document.getElementById('op-booking-date').value,
-            bed: '小劑量',
+        const doseValue = document.getElementById('op-booking-dose').value.trim();
+        const dose = doseValue ? parseFloat(doseValue) : null;
+        if (Number.isFinite(dose) && dose >= 30) { toast.show('小劑量預約必須 < 30mCi', 'error'); return; }
+        const date = document.getElementById('op-booking-date').value;
+        const status = this.editingBooking?.status || '待確認';
+
+        const newBooking = normalizeBooking({
+            id: this.editingBooking ? this.editingBooking.id : utils.generateId(),
+            date,
+            bed: null,
+            branch: document.getElementById('op-booking-branch').value,
+            bookingType: 'outpatient',
             isOutpatient: true,
-            chartNo: document.getElementById('op-booking-chart').value.toUpperCase(),
-            patientName: document.getElementById('op-booking-name').value,
-            dose: dose,
-            doctor: document.getElementById('op-booking-doctor').value,
-            medType: document.getElementById('op-booking-med-type').value,
-            createdBy: state.currentUser.username,
-            createdAt: new Date().toLocaleString('zh-TW')
-        };
-        mockBookings.push(newBooking);
+            chartNo: document.getElementById('op-booking-chart').value.trim().toUpperCase(),
+            patientName: document.getElementById('op-booking-name').value.trim(),
+            dose,
+            doctor: document.getElementById('op-booking-doctor').value.trim(),
+            radiotracer: document.getElementById('op-booking-radiotracer').value.trim() || 'I-131',
+            dosageForm: document.getElementById('op-booking-dosage-form').value,
+            status,
+            createdBy: this.editingBooking ? this.editingBooking.createdBy : state.currentUser.username,
+            createdAt: this.editingBooking ? this.editingBooking.createdAt : new Date().toLocaleString('zh-TW'),
+            updatedAt: this.editingBooking ? new Date().toLocaleString('zh-TW') : undefined,
+            updatedBy: this.editingBooking ? state.currentUser.username : undefined
+        });
+        const missingFields = utils.getMissingCoreFields(newBooking);
+        if (status === '已確認' && missingFields.length > 0) {
+            toast.show(`請先補齊：${missingFields.join('、')}`, 'error');
+            return;
+        }
+
+        utils.syncDoctorDirectory(newBooking.doctor);
+        upsertBookingRecord(newBooking);
         mockAuditLogs.unshift({
             id: mockAuditLogs.length + 1,
             userId: state.currentUser.username,
-            action: 'CREATE',
+            action: this.editingBooking ? 'UPDATE' : 'CREATE',
             target: 'Booking_OP',
             targetId: newBooking.id,
-            detail: `新增小劑量預約：${newBooking.patientName} (${newBooking.dose}mCi)`,
+            detail: `${this.editingBooking ? '更新' : '新增'}小劑量預約：${newBooking.patientName || '待補資料'} (${utils.formatDose(newBooking.dose)}mCi)`,
             timestamp: new Date().toLocaleString('zh-TW')
         });
-        toast.show('小劑量預約已建立', 'success');
+        toast.show(`小劑量預約已${this.editingBooking ? '更新' : '建立'}`, 'success');
         this.closeModal();
         this.render();
         calendar.render(); // 同步刷新月曆
+        bookings_module.render();
     },
 
     delete(id) {
+        const booking = mockBookings.find((item) => item.id === id);
+        if (!booking) return;
+        if (!utils.canUserModify(booking)) {
+            toast.show('您沒有權限刪除此門診預約', 'error');
+            return;
+        }
         if (!confirm('確定要刪除此小劑量預約嗎？')) return;
         const index = mockBookings.findIndex(b => b.id === id);
         if (index === -1) return;
-        const booking = mockBookings[index];
+        const targetBooking = mockBookings[index];
         mockBookings.splice(index, 1);
-        const isPast = new Date(booking.date) < new Date(new Date().setHours(0, 0, 0, 0));
+        const isPast = new Date(targetBooking.date) < new Date(new Date().setHours(0, 0, 0, 0));
         mockAuditLogs.unshift({
             id: mockAuditLogs.length + 1,
             userId: state.currentUser.username,
             action: 'DELETE',
             target: 'Booking_OP',
             targetId: id,
-            detail: `刪除${isPast ? '【歷史】' : ''}小劑量預約：${booking.patientName} (${booking.dose}mCi)`,
+            detail: `刪除${isPast ? '【歷史】' : ''}小劑量預約：${targetBooking.patientName} (${targetBooking.dose}mCi)`,
             timestamp: new Date().toLocaleString('zh-TW')
         });
         this.render();
@@ -1999,39 +2672,203 @@ const outpatient_module = {
 // Report Module (月結報表)
 // ============================================
 const report_module = {
+    initialized: false,
+
     init() {
-        const btn = document.getElementById('extract-month-report');
-        if (btn) btn.addEventListener('click', () => this.generateMonthlyReport());
+        if (!this.initialized) {
+            document.getElementById('print-report-btn')?.addEventListener('click', () => this.printReport());
+            ['report-start', 'report-end', 'report-doctor', 'report-branch', 'dose-min', 'dose-max'].forEach((id) => {
+                const element = document.getElementById(id);
+                element?.addEventListener('change', () => this.renderPreview());
+                if (element?.tagName === 'INPUT') {
+                    element.addEventListener('input', () => this.renderPreview());
+                }
+            });
+            this.initialized = true;
+        }
+        this.renderPreview();
     },
 
-    generateMonthlyReport() {
+    getFilteredData(monthOnly = false) {
         const targetYear = state.currentYear;
         const targetMonth = state.currentMonth;
-        const firstDay = new Date(targetYear, targetMonth, 1);
-        const lastDay = new Date(targetYear, targetMonth + 1, 0);
-        let reportData = mockBookings.filter(b => {
-            const bDate = new Date(b.date);
-            return bDate >= firstDay && bDate <= lastDay && !b.isOutpatient;
-        });
-        if (reportData.length === 0) { toast.show('本月份無住院排程資料可匯出', 'warning'); return; }
-        reportData.sort((a, b) => { if (a.date !== b.date) return new Date(a.date) - new Date(b.date); return a.bed.localeCompare(b.bed); });
+        const startInput = document.getElementById('report-start')?.value;
+        const endInput = document.getElementById('report-end')?.value;
+        const branch = document.getElementById('report-branch')?.value || '';
+        const doctor = (document.getElementById('report-doctor')?.value || '').trim().toLowerCase();
+        const minDose = document.getElementById('dose-min')?.value;
+        const maxDose = document.getElementById('dose-max')?.value;
+
+        const defaultStart = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-01`;
+        const defaultEnd = utils.formatDateShort(new Date(targetYear, targetMonth + 1, 0));
+        const effectiveStart = monthOnly ? defaultStart : (startInput || '');
+        const effectiveEnd = monthOnly ? defaultEnd : (endInput || '');
+
+        return [...mockBookings]
+            .filter((booking) => !effectiveStart || booking.date >= effectiveStart)
+            .filter((booking) => !effectiveEnd || booking.date <= effectiveEnd)
+            .filter((booking) => !branch || booking.branch === branch)
+            .filter((booking) => !doctor || (booking.doctor || '').toLowerCase().includes(doctor))
+            .filter((booking) => !minDose || (Number.isFinite(booking.dose) && booking.dose >= Number(minDose)))
+            .filter((booking) => !maxDose || (Number.isFinite(booking.dose) && booking.dose <= Number(maxDose)))
+            .sort((a, b) => {
+                if (a.date !== b.date) return new Date(a.date) - new Date(b.date);
+                return (a.bed || '門診').localeCompare(b.bed || '門診');
+            });
+    },
+
+    renderPreview() {
+        const tbody = document.getElementById('report-preview-body');
+        if (!tbody) return;
+        const reportData = this.getFilteredData(false);
+        if (reportData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="padding: 32px; text-align: center; color: var(--text-muted);">目前篩選條件下沒有資料</td></tr>';
+            return;
+        }
+        tbody.innerHTML = reportData.map((row) => `
+            <tr>
+                <td>${utils.escapeHtml(utils.formatDate(row.date))}</td>
+                <td>${utils.escapeHtml(row.branch || '義大')}</td>
+                <td>${utils.escapeHtml(utils.isOutpatientBooking(row) ? '門診' : row.bed)}</td>
+                <td>${utils.escapeHtml(row.chartNo || '待補')}</td>
+                <td>${utils.escapeHtml(row.patientName || '待補')}</td>
+                <td>${utils.escapeHtml(utils.formatDose(row.dose))}</td>
+                <td>${utils.escapeHtml(row.doctor || '待補')}</td>
+                <td>${utils.escapeHtml(row.status)}</td>
+                <td>${utils.escapeHtml(row.radiotracer || 'I-131')}</td>
+                <td>${utils.escapeHtml(row.dosageForm || 'Capsule')}</td>
+            </tr>
+        `).join('');
+    },
+
+    printReport() {
+        const reportData = this.getFilteredData(false);
+        if (reportData.length === 0) {
+            toast.show('目前沒有可列印的病患排程', 'warning');
+            return;
+        }
+
+        const printWindow = window.open('', '_blank', 'width=1280,height=900');
+        if (!printWindow) {
+            toast.show('請允許瀏覽器開啟列印視窗', 'error');
+            return;
+        }
+
+        const start = document.getElementById('report-start')?.value || '未指定';
+        const end = document.getElementById('report-end')?.value || '未指定';
+        const branch = document.getElementById('report-branch')?.value || '全部院區';
+        const doctor = document.getElementById('report-doctor')?.value || '全部醫師';
+        const minDose = document.getElementById('dose-min')?.value || '不限';
+        const maxDose = document.getElementById('dose-max')?.value || '不限';
+        const rows = reportData.map((row) => `
+            <tr>
+                <td>${utils.escapeHtml(utils.formatDate(row.date))}</td>
+                <td>${utils.escapeHtml(row.branch || '義大')}</td>
+                <td>${utils.escapeHtml(utils.isOutpatientBooking(row) ? '門診' : row.bed)}</td>
+                <td>${utils.escapeHtml(row.chartNo || '待補')}</td>
+                <td>${utils.escapeHtml(row.patientName || '待補')}</td>
+                <td>${utils.escapeHtml(utils.formatDose(row.dose))}</td>
+                <td>${utils.escapeHtml(row.doctor || '待補')}</td>
+                <td>${utils.escapeHtml(row.status)}</td>
+                <td>${utils.escapeHtml(row.radiotracer || 'I-131')}</td>
+                <td>${utils.escapeHtml(row.dosageForm || 'Capsule')}</td>
+            </tr>
+        `).join('');
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="zh-Hant">
+            <head>
+                <meta charset="UTF-8">
+                <title>病患排程表</title>
+                <style>
+                    body { font-family: "Microsoft JhengHei", sans-serif; margin: 24px; color: #111827; }
+                    h1 { margin: 0 0 8px; font-size: 24px; }
+                    .meta { margin-bottom: 16px; font-size: 13px; color: #4b5563; line-height: 1.8; }
+                    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+                    th, td { border: 1px solid #111827; padding: 8px 10px; font-size: 12px; text-align: left; vertical-align: top; word-break: break-word; }
+                    th { background: #f3f4f6; font-weight: 700; }
+                    @page { size: A4 landscape; margin: 12mm; }
+                </style>
+            </head>
+            <body>
+                <h1>病患排程表</h1>
+                <div class="meta">
+                    日期區間：${utils.escapeHtml(start)} ~ ${utils.escapeHtml(end)}<br>
+                    院區：${utils.escapeHtml(branch)}　主治醫師：${utils.escapeHtml(doctor)}<br>
+                    劑量範圍：${utils.escapeHtml(minDose)} ~ ${utils.escapeHtml(maxDose)} mCi　筆數：${reportData.length}
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>院區</th>
+                            <th>類別/床位</th>
+                            <th>病歷號</th>
+                            <th>病患姓名</th>
+                            <th>劑量</th>
+                            <th>主治醫師</th>
+                            <th>狀態</th>
+                            <th>藥品</th>
+                            <th>劑型</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    },
+
+    downloadCsv(reportData, filename) {
+        if (reportData.length === 0) {
+            toast.show('目前沒有可匯出的報表資料', 'warning');
+            return;
+        }
         let csvContent = '\uFEFF';
-        csvContent += '入住日期,床位,病歷號,病患姓名,醫令劑量(mCi),劑型,Thyrogen,主治醫師\n';
+        csvContent += '日期,院區,類別/床位,病歷號,病患姓名,劑量(mCi),主治醫師,狀態,藥品,劑型\n';
         reportData.forEach(row => {
-            const rowData = [row.date, row.bed, row.chartNo, row.patientName, row.dose, row.medType || '錠劑', row.thyrogen ? '是' : '否', row.doctor];
+            const rowData = [
+                row.date,
+                row.branch || '義大',
+                utils.isOutpatientBooking(row) ? '門診' : row.bed,
+                row.chartNo || '',
+                row.patientName || '',
+                Number.isFinite(row.dose) ? row.dose : '',
+                row.doctor || '',
+                row.status || '待確認',
+                row.radiotracer || 'I-131',
+                row.dosageForm || 'Capsule'
+            ];
             csvContent += rowData.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',') + '\n';
         });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        const monthStr = String(targetMonth + 1).padStart(2, '0');
         link.setAttribute('href', url);
-        link.setAttribute('download', `I131月結報表_${targetYear}${monthStr}.csv`);
+        link.setAttribute('download', `${filename}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        toast.show('月結報表下載成功', 'success');
+        toast.show('報表下載成功', 'success');
+    },
+
+    generateMonthlyReport() {
+        const targetYear = state.currentYear;
+        const targetMonth = state.currentMonth;
+        const monthStr = String(targetMonth + 1).padStart(2, '0');
+        const reportData = this.getFilteredData(true);
+        this.downloadCsv(reportData, `I131月結報表_${targetYear}${monthStr}`);
+    },
+
+    downloadCurrentPreview(prefix) {
+        const data = this.getFilteredData(false);
+        const today = utils.formatDateShort(new Date()).replace(/-/g, '');
+        this.downloadCsv(data, `${prefix}_${today}`);
     }
 };
 
@@ -2054,6 +2891,7 @@ document.addEventListener('DOMContentLoaded', () => {
     auditLogs.init();
     admin.init();
     userModal.init();
+    doctorModal.init();
     medication_module.init();
     outpatient_module.init();
     report_module.init();
