@@ -250,9 +250,34 @@ const utils = {
         if (dateOverrides[dateStr] && dateOverrides[dateStr]['all'] !== undefined) {
             return dateOverrides[dateStr]['all'];
         }
+        return this.getDefaultBedOpen(dateStr);
+    },
+
+    getDefaultBedOpen(dateStr) {
         const date = new Date(dateStr);
         if (this.isHoliday(dateStr)) return false;
         return CONFIG.BOOKING_DAYS.includes(date.getDay());
+    },
+
+    setBedOverride(dateStr, bed, isOpen) {
+        const scopedOverrides = dateOverrides[dateStr];
+        const inheritedState = scopedOverrides && scopedOverrides.all !== undefined
+            ? scopedOverrides.all
+            : this.getDefaultBedOpen(dateStr);
+
+        if (!dateOverrides[dateStr]) {
+            dateOverrides[dateStr] = {};
+        }
+
+        if (isOpen === inheritedState) {
+            delete dateOverrides[dateStr][bed];
+            if (Object.keys(dateOverrides[dateStr]).length === 0) {
+                delete dateOverrides[dateStr];
+            }
+            return;
+        }
+
+        dateOverrides[dateStr][bed] = isOpen;
     },
 
     isDayFullyClosed(dateStr) {
@@ -562,13 +587,14 @@ const auth = {
     updateUI() {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('dashboard').style.display = 'grid';
+        const isManager = utils.isManager();
 
         document.getElementById('user-name').textContent = state.currentUser.name;
         document.getElementById('user-role').textContent = utils.getRoleLabel(state.currentUser.role);
         document.getElementById('user-avatar').textContent = state.currentUser.name.charAt(0);
 
         document.querySelectorAll('.manager-only').forEach((item) => {
-            item.style.display = utils.isManager() ? 'flex' : 'none';
+            item.style.display = isManager ? 'flex' : 'none';
         });
         document.querySelectorAll('.privileged-only').forEach((item) => {
             item.style.display = utils.isPrivilegedEditor() ? 'flex' : 'none';
@@ -576,11 +602,25 @@ const auth = {
         document.querySelectorAll('.staff-only').forEach((item) => {
             item.style.display = state.currentUser?.role !== 'viewer' ? 'flex' : 'none';
         });
+        document.querySelectorAll('.nav-item').forEach((item) => {
+            const visible = isManager || item.dataset.page === 'calendar';
+            item.style.display = visible ? 'flex' : 'none';
+        });
 
         calendar.render();
-        bookings_module.render();
-        auditLogs.render();
-        admin.render();
+        if (isManager) {
+            bookings_module.render();
+            auditLogs.render();
+            admin.render();
+        } else {
+            document.getElementById('bookings-tbody').innerHTML = '';
+            document.getElementById('audit-list').innerHTML = '';
+            document.getElementById('report-preview-body').innerHTML = '';
+            document.getElementById('admin-overview').innerHTML = '';
+            document.getElementById('admin-bed-panel').innerHTML = '';
+            document.getElementById('doctors-tbody').innerHTML = '';
+            document.getElementById('users-tbody').innerHTML = '';
+        }
         this.updateHeaderDate();
         this.updateStats();
         navigation.goTo('calendar');
@@ -628,6 +668,9 @@ const navigation = {
     },
 
     goTo(page) {
+        if (!utils.isManager() && page !== 'calendar') {
+            page = 'calendar';
+        }
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === page);
         });
@@ -1198,10 +1241,7 @@ const dayModal = {
     },
 
     toggleBed(dateStr, bed, isOpen) {
-        if (!dateOverrides[dateStr]) {
-            dateOverrides[dateStr] = {};
-        }
-        dateOverrides[dateStr][bed] = isOpen;
+        utils.setBedOverride(dateStr, bed, isOpen);
 
         mockAuditLogs.unshift({
             id: mockAuditLogs.length + 1,
@@ -1712,6 +1752,152 @@ const admin = {
             bedDateInput.value = bedDateInput.value || normalizeDateValue(new Date());
             bedDateInput.addEventListener('change', () => this.renderBedPanel());
         }
+        const bulkStartInput = document.getElementById('admin-bed-range-start');
+        const bulkEndInput = document.getElementById('admin-bed-range-end');
+        if (bulkStartInput && bulkEndInput) {
+            const defaultDate = bedDateInput?.value || normalizeDateValue(new Date());
+            bulkStartInput.value = bulkStartInput.value || defaultDate;
+            bulkEndInput.value = bulkEndInput.value || defaultDate;
+        }
+        document.getElementById('admin-bed-bulk-apply')?.addEventListener('click', () => this.applyBulkBedOverrides());
+        document.getElementById('admin-bed-weekdays-all')?.addEventListener('click', () => this.setWeekdaySelection([0, 1, 2, 3, 4, 5, 6]));
+        document.getElementById('admin-bed-weekdays-workdays')?.addEventListener('click', () => this.setWeekdaySelection([1, 2, 3, 4, 5]));
+        document.getElementById('admin-bed-weekdays-bookable')?.addEventListener('click', () => this.setWeekdaySelection(CONFIG.BOOKING_DAYS));
+        document.getElementById('admin-bed-weekdays-clear')?.addEventListener('click', () => this.setWeekdaySelection([]));
+        this.setBulkFeedback('批次模式會自動略過已有預約的床位，並以單筆摘要記錄操作。');
+    },
+
+    setBulkFeedback(message, tone = '') {
+        const feedback = document.getElementById('admin-bed-bulk-feedback');
+        if (!feedback) return;
+        feedback.className = `admin-bed-bulk-feedback${tone ? ` ${tone}` : ''}`;
+        feedback.textContent = message;
+    },
+
+    setWeekdaySelection(days) {
+        document.querySelectorAll('.admin-bed-bulk-weekday').forEach((input) => {
+            input.checked = days.includes(Number(input.value));
+        });
+    },
+
+    getSelectedBulkBeds() {
+        return Array.from(document.querySelectorAll('.admin-bed-bulk-bed:checked')).map((input) => input.value);
+    },
+
+    getSelectedBulkWeekdays() {
+        return Array.from(document.querySelectorAll('.admin-bed-bulk-weekday:checked')).map((input) => Number(input.value));
+    },
+
+    applyBulkBedOverrides() {
+        if (!utils.isManager()) {
+            this.setBulkFeedback('僅管理者可使用批次床位開關。', 'warning');
+            toast.show('僅管理者可使用批次床位開關', 'error');
+            return;
+        }
+
+        const startInput = document.getElementById('admin-bed-range-start');
+        const endInput = document.getElementById('admin-bed-range-end');
+        const actionInput = document.getElementById('admin-bed-bulk-action');
+        const startDate = startInput?.value || '';
+        const endDate = endInput?.value || '';
+        const selectedBeds = this.getSelectedBulkBeds();
+        const selectedWeekdays = this.getSelectedBulkWeekdays();
+
+        if (!startDate || !endDate) {
+            this.setBulkFeedback('請先填入完整的起始與結束日期。', 'warning');
+            toast.show('請先填入完整日期區間', 'error');
+            return;
+        }
+        if (startDate > endDate) {
+            this.setBulkFeedback('結束日期不可早於起始日期。', 'warning');
+            toast.show('結束日期不可早於起始日期', 'error');
+            return;
+        }
+        if (selectedBeds.length === 0) {
+            this.setBulkFeedback('請至少勾選一個床位。', 'warning');
+            toast.show('請至少勾選一個床位', 'error');
+            return;
+        }
+        if (selectedWeekdays.length === 0) {
+            this.setBulkFeedback('請至少勾選一個星期。', 'warning');
+            toast.show('請至少勾選一個星期', 'error');
+            return;
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const totalDays = Math.floor((end - start) / 86400000) + 1;
+        if (totalDays > 180) {
+            this.setBulkFeedback('單次最多套用 180 天，請分段處理。', 'warning');
+            toast.show('單次最多套用 180 天', 'error');
+            return;
+        }
+        if (totalDays > 90 && !confirm(`這次會批次修改 ${totalDays} 天，確定繼續嗎？`)) {
+            return;
+        }
+
+        const targetOpen = (actionInput?.value || 'open') === 'open';
+        const weekdayLabels = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+        const skippedBooked = [];
+        let changedSlots = 0;
+        let unchangedSlots = 0;
+        let matchedDates = 0;
+
+        for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+            if (!selectedWeekdays.includes(cursor.getDay())) continue;
+            matchedDates += 1;
+            const dateStr = normalizeDateValue(cursor);
+
+            selectedBeds.forEach((bed) => {
+                if (utils.getBedStatus(dateStr, bed)) {
+                    skippedBooked.push(`${dateStr} ${bed}`);
+                    return;
+                }
+                const currentState = utils.isBedOpen(dateStr, bed);
+                if (currentState === targetOpen) {
+                    unchangedSlots += 1;
+                    return;
+                }
+                utils.setBedOverride(dateStr, bed, targetOpen);
+                changedSlots += 1;
+            });
+        }
+
+        if (matchedDates === 0) {
+            this.setBulkFeedback('所選日期區間內沒有符合的星期。', 'warning');
+            toast.show('所選日期區間內沒有符合的星期', 'warning');
+            return;
+        }
+
+        if (changedSlots === 0) {
+            const skippedText = skippedBooked.length > 0 ? `，另有 ${skippedBooked.length} 格因已有預約而略過` : '';
+            this.setBulkFeedback(`沒有需要變更的床位設定${skippedText}。`, 'warning');
+            toast.show('沒有需要變更的床位設定', 'warning');
+            return;
+        }
+
+        const skippedPreview = skippedBooked.length > 0
+            ? `；略過 ${skippedBooked.length} 格已有預約的床位（${skippedBooked.slice(0, 4).join('、')}${skippedBooked.length > 4 ? ' 等' : ''}）`
+            : '';
+        const unchangedPreview = unchangedSlots > 0 ? `；${unchangedSlots} 格原本已是目標狀態` : '';
+        const actionLabel = targetOpen ? '開床' : '關床';
+        const summaryMessage = `批次${actionLabel}完成：${matchedDates} 天、${selectedBeds.join(' / ')}，共變更 ${changedSlots} 格${unchangedPreview}${skippedPreview}`;
+
+        mockAuditLogs.unshift({
+            id: mockAuditLogs.length + 1,
+            userId: state.currentUser.username,
+            action: 'OVERRIDE',
+            target: 'BedBulk',
+            targetId: `${startDate}~${endDate}`,
+            detail: `批次${actionLabel}床位：${startDate}~${endDate}；床位 ${selectedBeds.join(', ')}；星期 ${selectedWeekdays.map((day) => weekdayLabels[day]).join('、')}；變更 ${changedSlots} 格；略過 ${skippedBooked.length} 格；未變更 ${unchangedSlots} 格`,
+            timestamp: new Date().toLocaleString('zh-TW')
+        });
+
+        this.setBulkFeedback(summaryMessage, skippedBooked.length > 0 ? 'warning' : 'success');
+        calendar.render();
+        auditLogs.render();
+        this.renderBedPanel();
+        toast.show(`已批次${actionLabel} ${changedSlots} 格`, 'success');
     },
 
     renderOverview() {

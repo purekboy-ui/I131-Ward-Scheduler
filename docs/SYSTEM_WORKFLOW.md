@@ -45,7 +45,8 @@
 ### 4.2 床位管理
 
 - 以 `日期 x 床位` 控制是否開床
-- 後台可直接切換 5B / 6B
+- 後台可直接切換單日 5B / 6B
+- 後台也可用日期區間 + 星期條件 + 床位勾選做批次開關
 - 月曆日管理視窗與後台共用同一套 `dateOverrides` 資料
 
 ## 5. 權限矩陣
@@ -53,13 +54,14 @@
 | 功能 | manager | super_editor | editor | viewer |
 | --- | --- | --- | --- | --- |
 | 查看月曆 | Yes | Yes | Yes | Yes |
+| 查看其他管理頁面 | Yes | No | No | No |
 | 新增住院預約 | Yes | Yes | Yes | No |
 | 新增門診小劑量 | Yes | Yes | Yes | No |
 | 編輯自己的待確認預約 | Yes | Yes | Yes | No |
 | 編輯他人預約 | Yes | 視後續實作 | No | No |
 | 收單確認 | Yes | No | No | No |
 | 後台管理 | Yes | No | No | No |
-| 查看操作紀錄 | Yes | Yes | Yes | No |
+| 查看操作紀錄 | Yes | No | No | No |
 
 > `super_editor` 目前是保留角色；實際上線時請依院內需求再細化。
 

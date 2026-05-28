@@ -2164,6 +2164,114 @@ button.bed-slot {
     font: inherit;
 }
 
+.admin-bed-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-bed-single-row,
+.admin-bed-bulk-box {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    padding: 12px;
+}
+
+.admin-bed-single-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-bed-tool-title {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.admin-bed-tool-note,
+.admin-bed-bulk-feedback {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.admin-bed-bulk-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-bed-bulk-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.admin-bed-bulk-grid .form-group,
+.admin-bed-bulk-box .form-group {
+    margin-bottom: 0;
+}
+
+.admin-bed-bulk-grid input,
+.admin-bed-bulk-grid select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: white;
+    font: inherit;
+}
+
+.admin-bed-checkbox-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-bed-check-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: white;
+    color: var(--text-primary);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.admin-bed-check-pill input {
+    margin: 0;
+}
+
+.admin-bed-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-bed-bulk-feedback {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: rgba(148, 163, 184, 0.1);
+}
+
+.admin-bed-bulk-feedback.success {
+    background: rgba(15, 122, 82, 0.12);
+    color: var(--success);
+}
+
+.admin-bed-bulk-feedback.warning {
+    background: rgba(179, 38, 30, 0.1);
+    color: var(--danger);
+}
+
 .admin-bed-panel {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2831,6 +2939,10 @@ button.bed-slot {
     .admin-bed-panel {
         grid-template-columns: 1fr;
     }
+
+    .admin-bed-bulk-grid {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 @media (max-width: 768px) {
@@ -2912,6 +3024,15 @@ button.bed-slot {
 @media (max-width: 480px) {
     .content-area {
         padding: var(--space-md);
+    }
+
+    .admin-bed-bulk-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-bed-single-row {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     .sticky-action-col {

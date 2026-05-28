@@ -130,7 +130,7 @@
                     </svg>
                     <span>預約排程</span>
                 </a>
-                <a href="#" class="nav-item" data-page="bookings">
+                <a href="#" class="nav-item manager-only" data-page="bookings" style="display: none;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
@@ -148,7 +148,7 @@
                     </svg>
                     <span>操作紀錄</span>
                 </a>
-                <a href="#" class="nav-item" data-page="reports">
+                <a href="#" class="nav-item manager-only" data-page="reports" style="display: none;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
                         <path d="M22 12A10 10 0 0 0 12 2v10z" />
@@ -474,7 +474,63 @@
                                         <p class="admin-eyebrow">床位設定</p>
                                         <h3>床位開關管理</h3>
                                     </div>
-                                    <input type="date" id="admin-bed-date" class="admin-date-input">
+                                </div>
+                                <div class="admin-bed-tools">
+                                    <div class="admin-bed-single-row">
+                                        <div>
+                                            <div class="admin-bed-tool-title">單日快切</div>
+                                            <div class="admin-bed-tool-note">先選日期，再用下方 5B / 6B 快速調整。</div>
+                                        </div>
+                                        <input type="date" id="admin-bed-date" class="admin-date-input">
+                                    </div>
+                                    <div class="admin-bed-bulk-box">
+                                        <div class="admin-bed-tool-title">批次套用</div>
+                                        <div class="admin-bed-tool-note">適合月排程、長假、整段關床或固定星期批次開關。</div>
+                                        <div class="admin-bed-bulk-grid">
+                                            <div class="form-group">
+                                                <label for="admin-bed-range-start">起始日期</label>
+                                                <input type="date" id="admin-bed-range-start">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="admin-bed-range-end">結束日期</label>
+                                                <input type="date" id="admin-bed-range-end">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="admin-bed-bulk-action">套用動作</label>
+                                                <select id="admin-bed-bulk-action">
+                                                    <option value="open">批次開床</option>
+                                                    <option value="close">批次關床</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>套用床位</label>
+                                                <div class="admin-bed-checkbox-row">
+                                                    <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-bed" value="5B" checked> <span>5B</span></label>
+                                                    <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-bed" value="6B" checked> <span>6B</span></label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>套用星期</label>
+                                            <div class="admin-bed-checkbox-row admin-bed-weekday-row">
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="0" checked> <span>日</span></label>
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="1" checked> <span>一</span></label>
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="2" checked> <span>二</span></label>
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="3" checked> <span>三</span></label>
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="4" checked> <span>四</span></label>
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="5" checked> <span>五</span></label>
+                                                <label class="admin-bed-check-pill"><input type="checkbox" class="admin-bed-bulk-weekday" value="6" checked> <span>六</span></label>
+                                            </div>
+                                        </div>
+                                        <div class="admin-bed-bulk-actions">
+                                            <button type="button" class="btn-outline" id="admin-bed-weekdays-all">全星期</button>
+                                            <button type="button" class="btn-outline" id="admin-bed-weekdays-workdays">平日</button>
+                                            <button type="button" class="btn-outline" id="admin-bed-weekdays-bookable">住院排程日</button>
+                                            <button type="button" class="btn-outline" id="admin-bed-weekdays-clear">清空星期</button>
+                                            <button type="button" class="btn-primary" id="admin-bed-bulk-apply">套用批次變更</button>
+                                        </div>
+                                        <div class="admin-bed-bulk-feedback" id="admin-bed-bulk-feedback">批次模式會自動略過已有預約的床位，並以單筆摘要記錄操作。</div>
+                                    </div>
                                 </div>
                                 <div id="admin-bed-panel" class="admin-bed-panel"></div>
                             </div>
