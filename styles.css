@@ -1843,7 +1843,7 @@ button.bed-slot {
 
 .booking-location-cell,
 .booking-patient-cell,
-.booking-med-cell {
+.booking-dose-cell {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -1852,7 +1852,7 @@ button.bed-slot {
 
 .booking-branch,
 .booking-patient-name,
-.booking-med-name {
+.booking-dose-name {
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
@@ -1860,14 +1860,14 @@ button.bed-slot {
 }
 
 .booking-patient-meta,
-.booking-med-meta {
+.booking-dose-meta {
     font-size: 0.82rem;
     color: var(--text-muted);
     line-height: 1.2;
 }
 
 .booking-patient-line,
-.booking-med-top {
+.booking-dose-top {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -2295,72 +2295,6 @@ button.bed-slot {
 .role-badge.viewer {
     background: rgba(168, 154, 163, 0.15);
     color: var(--text-secondary);
-}
-
-.med-review-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.med-patient-name {
-    font-weight: 800;
-    color: var(--text-primary);
-    font-size: 1.02rem;
-}
-
-.med-patient-chart {
-    font-size: 0.84rem;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-}
-
-.med-inline-editors {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.med-dose-input {
-    width: 88px;
-    padding: 7px 9px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    background: #fff;
-}
-
-.med-type-select {
-    min-width: 110px;
-    padding: 7px 9px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    background: #fff;
-}
-
-.med-dose-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: rgba(179, 38, 30, 0.14);
-    color: var(--danger);
-    font-size: 1rem;
-    font-weight: 800;
-    border: 1px solid rgba(179, 38, 30, 0.28);
-}
-
-.med-order-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-start;
-}
-
-.med-order-status {
-    font-size: 0.84rem;
-    font-weight: 700;
 }
 
 .status-badge {
