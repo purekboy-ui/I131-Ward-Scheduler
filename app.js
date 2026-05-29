@@ -1933,7 +1933,7 @@ const admin = {
             const isOpen = utils.isBedOpen(selectedDate, bed);
             const isBooked = Boolean(booking);
             const summary = isBooked
-                ? `${booking.patientName || '未填姓名'} · ${utils.formatDoseDisplay(booking.dose)}`
+                ? `${booking.patientName || '未填姓名'} · ${utils.formatDose(booking.dose)} mCi`
                 : (isOpen ? '空床，可預約' : '未開床');
             const meta = isBooked
                 ? `${booking.chartNo || '未填病歷號'} · ${booking.status || '待確認'}`
